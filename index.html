@@ -15,14 +15,13 @@
       Connect Wallet
     </button>
 
-    <p id="account" class="text-sm text-center mb-2"></p>
-    <div id="balances" class="text-xs text-gray-300 text-center mb-4"></div>
+    <p id="account" class="text-sm text-center mb-4"></p>
 
     <label for="fromToken" class="block text-sm mb-1">From Token</label>
-    <select id="fromToken" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white"></select>
+    <select id="fromToken" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white text-sm"></select>
 
     <label for="toToken" class="block text-sm mb-1">To Token</label>
-    <select id="toToken" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white"></select>
+    <select id="toToken" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white text-sm"></select>
 
     <label for="amount" class="block text-sm font-semibold mb-1">Amount to swap:</label>
     <input
@@ -76,28 +75,46 @@
 
       const address = await signer.getAddress();
       document.getElementById("account").innerText = `Connected: ${address}`;
-      await loadBalances();
+      await populateDropdownsWithBalances();
     }
 
-    async function loadBalances() {
+    async function populateDropdownsWithBalances() {
       const userAddress = await signer.getAddress();
-      const results = [];
+      const fromSel = document.getElementById("fromToken");
+      const toSel = document.getElementById("toToken");
+
+      fromSel.innerHTML = "";
+      toSel.innerHTML = "";
 
       for (const [key, token] of Object.entries(TOKENS)) {
+        let balanceText = "";
+
         if (!token.address) {
           const balance = await provider.getBalance(userAddress);
           const eth = ethers.utils.formatEther(balance);
-          results.push(`${token.symbol}: ${parseFloat(eth).toFixed(4)}`);
+          balanceText = parseFloat(eth).toFixed(4);
         } else {
           const contract = new ethers.Contract(token.address, erc20ABI, provider);
           const raw = await contract.balanceOf(userAddress);
           const decimals = await contract.decimals();
-          const formatted = ethers.utils.formatUnits(raw, decimals);
-          results.push(`${token.symbol}: ${parseFloat(formatted).toFixed(4)}`);
+          balanceText = parseFloat(ethers.utils.formatUnits(raw, decimals)).toFixed(4);
         }
+
+        const label = `${token.symbol} (${balanceText})`;
+
+        const optionFrom = document.createElement("option");
+        optionFrom.value = key;
+        optionFrom.text = label;
+        fromSel.appendChild(optionFrom);
+
+        const optionTo = document.createElement("option");
+        optionTo.value = key;
+        optionTo.text = label;
+        toSel.appendChild(optionTo);
       }
 
-      document.getElementById("balances").innerHTML = results.map(b => `<div>${b}</div>`).join("");
+      fromSel.value = "AVAX";
+      toSel.value = "USDC.e";
     }
 
     async function swapTokens() {
@@ -129,33 +146,14 @@
         document.getElementById("status").innerText = `Swapping... TX: ${tx.hash}`;
         await tx.wait();
         document.getElementById("status").innerText = "✅ Swap complete!";
-        await loadBalances();
+        await populateDropdownsWithBalances();
       } catch (err) {
         document.getElementById("status").innerText = `❌ ${err.message}`;
       }
     }
 
-    function populateDropdowns() {
-      const fromSel = document.getElementById("fromToken");
-      const toSel = document.getElementById("toToken");
-      for (const [key, token] of Object.entries(TOKENS)) {
-        const o1 = document.createElement("option");
-        o1.value = key;
-        o1.text = token.symbol;
-        fromSel.appendChild(o1);
-
-        const o2 = document.createElement("option");
-        o2.value = key;
-        o2.text = token.symbol;
-        toSel.appendChild(o2);
-      }
-      fromSel.value = "AVAX";
-      toSel.value = "USDC.e";
-    }
-
     document.getElementById("connect").onclick = connectWallet;
     document.getElementById("swap").onclick = swapTokens;
-    document.addEventListener("DOMContentLoaded", populateDropdowns);
   </script>
 </body>
 </html>
