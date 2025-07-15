@@ -14,7 +14,9 @@
     <button id="connect" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full mb-4">
       Connect Wallet
     </button>
-    <p id="account" class="text-sm text-center mb-4"></p>
+
+    <p id="account" class="text-sm text-center mb-2"></p>
+    <div id="balances" class="text-xs text-gray-300 text-center mb-4"></div>
 
     <label for="fromToken" class="block text-sm mb-1">From Token</label>
     <select id="fromToken" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white"></select>
@@ -48,15 +50,20 @@
       "WETH.e": { symbol: "WETH.e", address: "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB" }
     };
 
-    const abi = [
+    const swapABI = [
       "function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)",
       "function swapExactTokensForAVAX(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) returns (uint[] memory amounts)",
       "function approve(address spender, uint256 amount) public returns (bool)"
     ];
 
+    const erc20ABI = [
+      "function balanceOf(address owner) view returns (uint256)",
+      "function decimals() view returns (uint8)"
+    ];
+
     let provider, signer, router;
 
-    document.getElementById("connect").onclick = async () => {
+    async function connectWallet() {
       if (!window.ethereum) {
         alert("Please install MetaMask!");
         return;
@@ -65,86 +72,90 @@
       provider = new ethers.providers.Web3Provider(window.ethereum);
       await provider.send("eth_requestAccounts", []);
       signer = provider.getSigner();
+      router = new ethers.Contract(routerAddress, swapABI, signer);
 
       const address = await signer.getAddress();
       document.getElementById("account").innerText = `Connected: ${address}`;
+      await loadBalances();
+    }
 
-      router = new ethers.Contract(routerAddress, abi, signer);
-    };
+    async function loadBalances() {
+      const userAddress = await signer.getAddress();
+      const results = [];
+
+      for (const [key, token] of Object.entries(TOKENS)) {
+        if (!token.address) {
+          const balance = await provider.getBalance(userAddress);
+          const eth = ethers.utils.formatEther(balance);
+          results.push(`${token.symbol}: ${parseFloat(eth).toFixed(4)}`);
+        } else {
+          const contract = new ethers.Contract(token.address, erc20ABI, provider);
+          const raw = await contract.balanceOf(userAddress);
+          const decimals = await contract.decimals();
+          const formatted = ethers.utils.formatUnits(raw, decimals);
+          results.push(`${token.symbol}: ${parseFloat(formatted).toFixed(4)}`);
+        }
+      }
+
+      document.getElementById("balances").innerHTML = results.map(b => `<div>${b}</div>`).join("");
+    }
 
     async function swapTokens() {
       const from = document.getElementById("fromToken").value;
       const to = document.getElementById("toToken").value;
-      const inputAmount = document.getElementById("amount").value;
+      const input = document.getElementById("amount").value;
 
-      if (!inputAmount || isNaN(inputAmount)) {
-        alert("Enter a valid amount");
-        return;
-      }
+      if (!input || isNaN(input)) return alert("Enter a valid amount");
 
-      const amountIn = ethers.utils.parseEther(inputAmount);
-      const amountOutMin = 0;
+      const amountIn = ethers.utils.parseEther(input);
+      const user = await signer.getAddress();
       const deadline = Math.floor(Date.now() / 1000) + 600;
-      const userAddress = await signer.getAddress();
+      let tx;
 
       try {
-        let tx;
-
         if (from === "AVAX") {
           const path = [WAVAX, TOKENS[to].address];
-          tx = await router.swapExactAVAXForTokens(
-            amountOutMin,
-            path,
-            userAddress,
-            deadline,
-            { value: amountIn }
-          );
+          tx = await router.swapExactAVAXForTokens(0, path, user, deadline, { value: amountIn });
         } else if (to === "AVAX") {
-          const tokenContract = new ethers.Contract(TOKENS[from].address, abi, signer);
-          await tokenContract.approve(routerAddress, amountIn);
+          const token = new ethers.Contract(TOKENS[from].address, swapABI, signer);
+          await token.approve(routerAddress, amountIn);
           const path = [TOKENS[from].address, WAVAX];
-          tx = await router.swapExactTokensForAVAX(
-            amountIn,
-            amountOutMin,
-            path,
-            userAddress,
-            deadline
-          );
+          tx = await router.swapExactTokensForAVAX(amountIn, 0, path, user, deadline);
         } else {
-          alert("Only AVAX → Token or Token → AVAX supported in this example.");
+          alert("Only AVAX → Token or Token → AVAX supported");
           return;
         }
 
         document.getElementById("status").innerText = `Swapping... TX: ${tx.hash}`;
         await tx.wait();
-        document.getElementById("status").innerText = `✅ Swap complete!`;
+        document.getElementById("status").innerText = "✅ Swap complete!";
+        await loadBalances();
       } catch (err) {
         document.getElementById("status").innerText = `❌ ${err.message}`;
       }
     }
 
-    function populateTokenDropdowns() {
-      const fromSelect = document.getElementById("fromToken");
-      const toSelect = document.getElementById("toToken");
+    function populateDropdowns() {
+      const fromSel = document.getElementById("fromToken");
+      const toSel = document.getElementById("toToken");
       for (const [key, token] of Object.entries(TOKENS)) {
-        const opt1 = document.createElement("option");
-        opt1.value = key;
-        opt1.text = token.symbol;
-        fromSelect.appendChild(opt1);
+        const o1 = document.createElement("option");
+        o1.value = key;
+        o1.text = token.symbol;
+        fromSel.appendChild(o1);
 
-        const opt2 = document.createElement("option");
-        opt2.value = key;
-        opt2.text = token.symbol;
-        toSelect.appendChild(opt2);
+        const o2 = document.createElement("option");
+        o2.value = key;
+        o2.text = token.symbol;
+        toSel.appendChild(o2);
       }
-      fromSelect.value = "AVAX";
-      toSelect.value = "USDC.e";
+      fromSel.value = "AVAX";
+      toSel.value = "USDC.e";
     }
 
-    document.addEventListener("DOMContentLoaded", () => {
-      populateTokenDropdowns();
-      document.getElementById("swap").onclick = swapTokens;
-    });
+    document.getElementById("connect").onclick = connectWallet;
+    document.getElementById("swap").onclick = swapTokens;
+    document.addEventListener("DOMContentLoaded", populateDropdowns);
   </script>
 </body>
 </html>
