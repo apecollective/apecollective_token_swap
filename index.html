@@ -4,22 +4,25 @@
   <meta charset="UTF-8" />
   <title>AVAX Token Swapper</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- Tailwind CSS CDN for quick styling -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Ethers.js -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
-
   <div class="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg">
-    <h2 class="text-2xl font-bold mb-6 text-center">Swap AVAX → USDC.e (Trader Joe)</h2>
+    <h2 class="text-2xl font-bold mb-6 text-center">AVAX Token Swapper</h2>
 
     <button id="connect" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full mb-4">
       Connect Wallet
     </button>
-    <p id="account" class="text-sm text-center mb-6"></p>
+    <p id="account" class="text-sm text-center mb-4"></p>
 
-    <label for="amount" class="block text-sm font-semibold mb-2">Amount of AVAX to swap:</label>
+    <label for="fromToken" class="block text-sm mb-1">From Token</label>
+    <select id="fromToken" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white"></select>
+
+    <label for="toToken" class="block text-sm mb-1">To Token</label>
+    <select id="toToken" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white"></select>
+
+    <label for="amount" class="block text-sm font-semibold mb-1">Amount to swap:</label>
     <input
       type="text"
       id="amount"
@@ -35,12 +38,20 @@
   </div>
 
   <script>
-    const routerAddress = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4"; // Trader Joe Router
-    const USDC = "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"; // USDC.e
-    const WAVAX = "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7"; // Wrapped AVAX
+    const routerAddress = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4";
+    const WAVAX = "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7";
+
+    const TOKENS = {
+      AVAX: { symbol: "AVAX", address: null },
+      "USDC.e": { symbol: "USDC.e", address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E" },
+      "DAI.e": { symbol: "DAI.e", address: "0xd586E7F844cEa2F87f50152665BCbc2C279D8d70" },
+      "WETH.e": { symbol: "WETH.e", address: "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB" }
+    };
 
     const abi = [
-      "function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)"
+      "function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)",
+      "function swapExactTokensForAVAX(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) returns (uint[] memory amounts)",
+      "function approve(address spender, uint256 amount) public returns (bool)"
     ];
 
     let provider, signer, router;
@@ -61,34 +72,79 @@
       router = new ethers.Contract(routerAddress, abi, signer);
     };
 
-    document.getElementById("swap").onclick = async () => {
+    async function swapTokens() {
+      const from = document.getElementById("fromToken").value;
+      const to = document.getElementById("toToken").value;
       const inputAmount = document.getElementById("amount").value;
+
       if (!inputAmount || isNaN(inputAmount)) {
-        alert("Enter a valid number");
+        alert("Enter a valid amount");
         return;
       }
 
       const amountIn = ethers.utils.parseEther(inputAmount);
-      const amountOutMin = 0; // Set slippage protection in production
-      const path = [WAVAX, USDC];
-      const to = await signer.getAddress();
+      const amountOutMin = 0;
       const deadline = Math.floor(Date.now() / 1000) + 600;
+      const userAddress = await signer.getAddress();
 
       try {
-        const tx = await router.swapExactAVAXForTokens(
-          amountOutMin,
-          path,
-          to,
-          deadline,
-          { value: amountIn }
-        );
-        document.getElementById("status").innerText = `Swapping... TX Hash: ${tx.hash}`;
+        let tx;
+
+        if (from === "AVAX") {
+          const path = [WAVAX, TOKENS[to].address];
+          tx = await router.swapExactAVAXForTokens(
+            amountOutMin,
+            path,
+            userAddress,
+            deadline,
+            { value: amountIn }
+          );
+        } else if (to === "AVAX") {
+          const tokenContract = new ethers.Contract(TOKENS[from].address, abi, signer);
+          await tokenContract.approve(routerAddress, amountIn);
+          const path = [TOKENS[from].address, WAVAX];
+          tx = await router.swapExactTokensForAVAX(
+            amountIn,
+            amountOutMin,
+            path,
+            userAddress,
+            deadline
+          );
+        } else {
+          alert("Only AVAX → Token or Token → AVAX supported in this example.");
+          return;
+        }
+
+        document.getElementById("status").innerText = `Swapping... TX: ${tx.hash}`;
         await tx.wait();
         document.getElementById("status").innerText = `✅ Swap complete!`;
       } catch (err) {
-        document.getElementById("status").innerText = `❌ Error: ${err.message}`;
+        document.getElementById("status").innerText = `❌ ${err.message}`;
       }
-    };
+    }
+
+    function populateTokenDropdowns() {
+      const fromSelect = document.getElementById("fromToken");
+      const toSelect = document.getElementById("toToken");
+      for (const [key, token] of Object.entries(TOKENS)) {
+        const opt1 = document.createElement("option");
+        opt1.value = key;
+        opt1.text = token.symbol;
+        fromSelect.appendChild(opt1);
+
+        const opt2 = document.createElement("option");
+        opt2.value = key;
+        opt2.text = token.symbol;
+        toSelect.appendChild(opt2);
+      }
+      fromSelect.value = "AVAX";
+      toSelect.value = "USDC.e";
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      populateTokenDropdowns();
+      document.getElementById("swap").onclick = swapTokens;
+    });
   </script>
 </body>
 </html>
