@@ -34,7 +34,9 @@
     </div>
 
     <label class="block text-sm mb-1">Amount</label>
-    <input id="amount" placeholder="e.g. 0.1" class="w-full p-2 mb-4 rounded bg-gray-700 text-white border border-gray-600" />
+    <input id="amount" placeholder="e.g. 0.1" class="w-full p-2 mb-2 rounded bg-gray-700 text-white border border-gray-600" />
+
+    <p id="priceEstimate" class="text-sm text-gray-400 mb-4 text-center"></p>
 
     <button id="swap" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">
       Swap Now
@@ -128,7 +130,8 @@
         item.onclick = () => {
           fromToken = key;
           document.getElementById("fromLabel").innerText = `${token.symbol} (${balance})`;
-          fromList.classList.add("hidden");
+          document.getElementById("fromList").classList.add("hidden");
+          estimatePrice();
         };
         fromList.appendChild(item);
 
@@ -136,13 +139,44 @@
         item2.onclick = () => {
           toToken = key;
           document.getElementById("toLabel").innerText = `${token.symbol} (${balance})`;
-          toList.classList.add("hidden");
+          document.getElementById("toList").classList.add("hidden");
+          estimatePrice();
         };
         toList.appendChild(item2);
       }
 
       document.getElementById("fromLabel").innerText = `AVAX`;
       document.getElementById("toLabel").innerText = `USDC.e`;
+    }
+
+    async function estimatePrice() {
+      const amountInput = document.getElementById("amount").value;
+      const estimateBox = document.getElementById("priceEstimate");
+
+      if (!amountInput || isNaN(amountInput)) {
+        estimateBox.innerText = "";
+        return;
+      }
+
+      const inputAmount = ethers.utils.parseEther(amountInput);
+      const path = fromToken === "AVAX"
+        ? [WAVAX, TOKENS[toToken].address]
+        : toToken === "AVAX"
+        ? [TOKENS[fromToken].address, WAVAX]
+        : null;
+
+      if (!path) {
+        estimateBox.innerText = "Only AVAX <-> Token supported";
+        return;
+      }
+
+      try {
+        const amountsOut = await router.getAmountsOut(inputAmount, path);
+        const output = ethers.utils.formatEther(amountsOut[1]);
+        estimateBox.innerText = `Estimated: ${output} ${toToken}`;
+      } catch (err) {
+        estimateBox.innerText = "Could not estimate output.";
+      }
     }
 
     async function swapTokens() {
@@ -171,6 +205,7 @@
         await tx.wait();
         document.getElementById("status").innerText = "✅ Swap complete!";
         await populateDropdownsWithBalances();
+        estimatePrice();
       } catch (err) {
         document.getElementById("status").innerText = `❌ ${err.message}`;
       }
@@ -180,6 +215,7 @@
     document.getElementById("swap").onclick = swapTokens;
     document.getElementById("fromDropdown").onclick = () => document.getElementById("fromList").classList.toggle("hidden");
     document.getElementById("toDropdown").onclick = () => document.getElementById("toList").classList.toggle("hidden");
+    document.getElementById("amount").addEventListener("input", estimatePrice);
   </script>
 </body>
 </html>
