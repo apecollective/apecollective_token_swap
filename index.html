@@ -2,33 +2,52 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AVAX Token Swapper (WalletConnect)</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <script type="module">
     import { EthereumClient, w3mConnectors, w3mProvider } from 'https://unpkg.com/@web3modal/ethereum?module';
     import { Web3Modal } from 'https://unpkg.com/@web3modal/html?module';
     import { configureChains, createClient } from 'https://unpkg.com/@wagmi/core?module';
     import { avalanche } from 'https://unpkg.com/@wagmi/core/chains?module';
 
-    const projectId = 'c03b6a909922b731fa377f3e996455d5'; // Replace with your WalletConnect Project ID
-
+    const projectId = 'c03b6a909922b731fa377f3e996455d5';
     const { chains, provider } = configureChains([avalanche], [w3mProvider({ projectId })]);
     const wagmiClient = createClient({
       autoConnect: true,
       connectors: w3mConnectors({ projectId, version: '2', chains }),
       provider
     });
-
     const ethereumClient = new EthereumClient(wagmiClient, chains);
     const web3Modal = new Web3Modal({ projectId, themeMode: 'light' }, ethereumClient);
 
+    const TOKENS = {
+      AVAX: {
+        address: null,
+        symbol: 'AVAX'
+      },
+      USDC: {
+        address: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
+        symbol: 'USDC.e'
+      }
+    };
+
+    const WAVAX = '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7';
+    const routerAddress = '0x60aE616a2155Ee3d9A68541Ba4544862310933d4';
+    const abi = ["function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)",
+                 "function swapExactTokensForAVAX(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) returns (uint[] memory amounts)"];
+
     let signer;
+    let fromToken = 'AVAX';
+    let toToken = 'USDC';
 
     document.addEventListener('DOMContentLoaded', () => {
       const connectBtn = document.getElementById('connect');
       const swapBtn = document.getElementById('swap');
       const walletAddress = document.getElementById('walletAddress');
       const status = document.getElementById('status');
+      const flipBtn = document.getElementById('flip');
 
       connectBtn.onclick = async () => {
         await web3Modal.openModal();
@@ -37,42 +56,48 @@
         walletAddress.innerText = `Connected: ${address}`;
       };
 
+      flipBtn.onclick = () => {
+        [fromToken, toToken] = [toToken, fromToken];
+        updateTokenLabels();
+      };
+
       swapBtn.onclick = async () => {
-        if (!signer) {
-          alert("Connect your wallet first");
-          return;
-        }
+        if (!signer) return alert("Connect wallet first");
 
         const inputAmount = document.getElementById('amount').value;
-        if (!inputAmount || isNaN(inputAmount)) {
-          alert("Enter a valid number");
-          return;
-        }
+        if (!inputAmount || isNaN(inputAmount)) return alert("Enter valid amount");
 
         const amountIn = ethers.utils.parseEther(inputAmount);
-        const routerAddress = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4";
-        const USDC = "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E";
-        const WAVAX = "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7";
-
-        const abi = [
-          "function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)"
-        ];
-
         const router = new ethers.Contract(routerAddress, abi, signer);
         const to = await signer.getAddress();
         const deadline = Math.floor(Date.now() / 1000) + 600;
-        const path = [WAVAX, USDC];
 
         try {
-          const tx = await router.swapExactAVAXForTokens(0, path, to, deadline, { value: amountIn });
-          status.innerText = `Swapping... TX Hash: ${tx.hash}`;
+          let tx;
+          if (fromToken === 'AVAX') {
+            const path = [WAVAX, TOKENS[toToken].address];
+            tx = await router.swapExactAVAXForTokens(0, path, to, deadline, { value: amountIn });
+          } else {
+            const path = [TOKENS[fromToken].address, WAVAX];
+            const tokenContract = new ethers.Contract(TOKENS[fromToken].address, ["function approve(address spender, uint256 amount) public returns (bool)"], signer);
+            await tokenContract.approve(routerAddress, amountIn);
+            tx = await router.swapExactTokensForAVAX(amountIn, 0, path, to, deadline);
+          }
+          status.innerText = `Swapping... TX: ${tx.hash}`;
           await tx.wait();
           status.innerText = `✅ Swap complete!`;
         } catch (err) {
-          status.innerText = `❌ Error: ${err.message}`;
+          status.innerText = `❌ ${err.message}`;
         }
       };
+
+      updateTokenLabels();
     });
+
+    function updateTokenLabels() {
+      document.getElementById('fromLabel').innerText = `From (${TOKENS[fromToken].symbol})`;
+      document.getElementById('toLabel').innerText = `To (${TOKENS[toToken].symbol})`;
+    }
 
     async function getSigner() {
       const provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -81,15 +106,24 @@
     }
   </script>
 </head>
-<body style="font-family: sans-serif;">
-  <h2>Swap AVAX → USDC.e (via WalletConnect)</h2>
-  <button id="connect">Connect Wallet</button>
-  <p id="walletAddress"></p>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-6">
+  <div class="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg">
+    <h2 class="text-2xl font-bold mb-4 text-center">AVAX Token Swapper</h2>
+    <button id="connect" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full mb-4">Connect Wallet</button>
+    <p id="walletAddress" class="text-sm text-center mb-4"></p>
 
-  <label>AVAX Amount:</label>
-  <input type="text" id="amount" placeholder="e.g. 0.1">
-  <button id="swap">Swap Now</button>
+    <label id="fromLabel" class="block mb-1">From (AVAX)</label>
+    <input type="text" id="amount" placeholder="e.g. 0.1" class="w-full p-2 mb-4 rounded bg-gray-700 text-white border border-gray-600">
 
-  <p id="status"></p>
+    <div class="flex justify-center mb-4">
+      <button id="flip" class="bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-1 rounded">Flip ↕️</button>
+    </div>
+
+    <label id="toLabel" class="block mb-1">To (USDC.e)</label>
+    <div class="w-full p-2 mb-4 rounded bg-gray-700 text-white border border-gray-600">Auto-calculated after swap</div>
+
+    <button id="swap" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">Swap Now</button>
+    <p id="status" class="text-sm mt-4 text-center"></p>
+  </div>
 </body>
 </html>
