@@ -1,31 +1,73 @@
 <!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8" /><title>WC2 Debug</title>
-<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-<script src="https://unpkg.com/@web3modal/html@2.6.2/dist/index.umd.js"></script>
+<html>
+<head>
+  <title>AVAX Token Swapper</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 </head>
-<body>
+<body style="font-family: sans-serif;">
+  <h2>Swap AVAX → USDC.e (Trader Joe)</h2>
   <button id="connect">Connect Wallet</button>
-  <pre id="output"></pre>
+  <p id="account"></p>
+
+  <label>Amount of AVAX to swap:</label>
+  <input type="text" id="amount" placeholder="e.g. 0.1">
+  <button id="swap">Swap Now</button>
+
+  <p id="status"></p>
 
   <script>
-    const projectId = 'c03b6a909922b731fa377f3e996455d5';
+    const routerAddress = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4"; // JoeRouter02
+    const USDC = "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"; // USDC.e
+    const WAVAX = "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7"; // Wrapped AVAX
 
-    const web3Modal = new window.Web3ModalHtml.Web3Modal({ projectId });
+    const abi = [
+      "function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)"
+    ];
 
-    document.getElementById('connect').onclick = async () => {
+    let provider, signer, router;
+
+    document.getElementById("connect").onclick = async () => {
+      if (!window.ethereum) {
+        alert("Please install MetaMask!");
+        return;
+      }
+
+      provider = new ethers.providers.Web3Provider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      signer = provider.getSigner();
+
+      const address = await signer.getAddress();
+      document.getElementById("account").innerText = `Connected: ${address}`;
+
+      router = new ethers.Contract(routerAddress, abi, signer);
+    };
+
+    document.getElementById("swap").onclick = async () => {
+      const inputAmount = document.getElementById("amount").value;
+      if (!inputAmount || isNaN(inputAmount)) {
+        alert("Enter a valid number");
+        return;
+      }
+
+      const amountIn = ethers.utils.parseEther(inputAmount);
+      const amountOutMin = 0; // Accept any output (adjust in production)
+      const path = [WAVAX, USDC];
+      const to = await signer.getAddress();
+      const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
+
       try {
-        const wcProvider = await web3Modal.connect();
-        const provider = new ethers.providers.Web3Provider(wcProvider);
-        const signer = provider.getSigner();
-        const address = await signer.getAddress();
-        document.getElementById('output').textContent = 'Connected: ' + address;
-
-        wcProvider.on("disconnect", () => {
-          document.getElementById('output').textContent = 'Disconnected';
-        });
-      } catch(e) {
-        document.getElementById('output').textContent = 'Error: ' + e.message;
+        const tx = await router.swapExactAVAXForTokens(
+          amountOutMin,
+          path,
+          to,
+          deadline,
+          { value: amountIn }
+        );
+        document.getElementById("status").innerText = `Swapping... TX Hash: ${tx.hash}`;
+        await tx.wait();
+        document.getElementById("status").innerText = `✅ Swap complete!`;
+      } catch (err) {
+        document.getElementById("status").innerText = `❌ Error: ${err.message}`;
       }
     };
   </script>
