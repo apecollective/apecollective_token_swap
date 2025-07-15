@@ -1,121 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AVAX Token Swapper (WalletConnect v2 UMD)</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Ethers.js UMD -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
-  <!-- Web3Modal UMD (includes WalletConnect v2) -->
-  <script src="https://unpkg.com/@web3modal/html@2.6.2/dist/index.umd.js"></script>
+<head><meta charset="UTF-8" /><title>WC2 Debug</title>
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+<script src="https://unpkg.com/@web3modal/html@2.6.2/dist/index.umd.js"></script>
+</head>
+<body>
+  <button id="connect">Connect Wallet</button>
+  <pre id="output"></pre>
+
   <script>
-    const projectId = 'c03b6a909922b731fa377f3e996455d5'; // Your WalletConnect project ID
+    const projectId = 'c03b6a909922b731fa377f3e996455d5';
 
-    const TOKENS = {
-      AVAX: { address: null, symbol: 'AVAX' },
-      USDC: { address: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', symbol: 'USDC.e' }
-    };
+    const web3Modal = new window.Web3ModalHtml.Web3Modal({ projectId });
 
-    const WAVAX = '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7';
-    const routerAddress = '0x60aE616a2155Ee3d9A68541Ba4544862310933d4';
-    const routerAbi = [
-      "function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)",
-      "function swapExactTokensForAVAX(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) returns (uint[] memory amounts)",
-      "function approve(address spender, uint256 amount) public returns (bool)"
-    ];
-
-    let web3Modal, provider, signer;
-    let fromToken = 'AVAX';
-    let toToken = 'USDC';
-
-    window.addEventListener('DOMContentLoaded', () => {
-      // Init Web3Modal
-      web3Modal = new window.Web3ModalHtml.Web3Modal({
-        projectId,
-        themeMode: 'light',
-      });
-
-      document.getElementById('connect').onclick = connectWallet;
-      document.getElementById('swap').onclick = swapTokens;
-      document.getElementById('flip').onclick = () => {
-        [fromToken, toToken] = [toToken, fromToken];
-        updateTokenLabels();
-      };
-      updateTokenLabels();
-    });
-
-    async function connectWallet() {
+    document.getElementById('connect').onclick = async () => {
       try {
         const wcProvider = await web3Modal.connect();
-        provider = new ethers.providers.Web3Provider(wcProvider);
-        signer = provider.getSigner();
+        const provider = new ethers.providers.Web3Provider(wcProvider);
+        const signer = provider.getSigner();
         const address = await signer.getAddress();
-        document.getElementById('walletAddress').textContent = `Connected: ${address}`;
-        // Detect disconnect
+        document.getElementById('output').textContent = 'Connected: ' + address;
+
         wcProvider.on("disconnect", () => {
-          document.getElementById('walletAddress').textContent = '';
-          signer = null;
-          provider = null;
+          document.getElementById('output').textContent = 'Disconnected';
         });
-      } catch (err) {
-        alert("Connection failed: " + err.message);
+      } catch(e) {
+        document.getElementById('output').textContent = 'Error: ' + e.message;
       }
-    }
-
-    async function swapTokens() {
-      if (!signer) return alert("Connect wallet first");
-      const inputAmount = document.getElementById('amount').value.trim();
-      if (!inputAmount || isNaN(inputAmount)) return alert("Enter a valid amount");
-
-      const amountIn = ethers.utils.parseEther(inputAmount);
-      const router = new ethers.Contract(routerAddress, routerAbi, signer);
-      const to = await signer.getAddress();
-      const deadline = Math.floor(Date.now() / 1000) + 600;
-
-      try {
-        let tx;
-        if (fromToken === 'AVAX') {
-          const path = [WAVAX, TOKENS[toToken].address];
-          tx = await router.swapExactAVAXForTokens(0, path, to, deadline, { value: amountIn });
-        } else {
-          const tokenContract = new ethers.Contract(TOKENS[fromToken].address, routerAbi, signer);
-          await tokenContract.approve(routerAddress, amountIn);
-          const path = [TOKENS[fromToken].address, WAVAX];
-          tx = await router.swapExactTokensForAVAX(amountIn, 0, path, to, deadline);
-        }
-        document.getElementById('status').textContent = `Swapping... TX: ${tx.hash}`;
-        await tx.wait();
-        document.getElementById('status').textContent = '✅ Swap complete!';
-      } catch (error) {
-        document.getElementById('status').textContent = `❌ ${error.message}`;
-      }
-    }
-
-    function updateTokenLabels() {
-      document.getElementById('fromLabel').textContent = `From (${TOKENS[fromToken].symbol})`;
-      document.getElementById('toLabel').textContent = `To (${TOKENS[toToken].symbol})`;
-    }
+    };
   </script>
-</head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-6">
-  <div class="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg">
-    <h2 class="text-2xl font-bold mb-4 text-center">AVAX Token Swapper</h2>
-    <button id="connect" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full mb-4">Connect Wallet</button>
-    <p id="walletAddress" class="text-sm text-center mb-4"></p>
-
-    <label id="fromLabel" class="block mb-1">From (AVAX)</label>
-    <input type="text" id="amount" placeholder="e.g. 0.1" class="w-full p-2 mb-4 rounded bg-gray-700 text-white border border-gray-600" />
-
-    <div class="flex justify-center mb-4">
-      <button id="flip" class="bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-1 rounded">Flip ↕️</button>
-    </div>
-
-    <label id="toLabel" class="block mb-1">To (USDC.e)</label>
-    <div class="w-full p-2 mb-4 rounded bg-gray-700 text-white border border-gray-600">Auto-calculated after swap</div>
-
-    <button id="swap" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">Swap Now</button>
-    <p id="status" class="text-sm mt-4 text-center"></p>
-  </div>
 </body>
 </html>
