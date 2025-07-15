@@ -6,22 +6,8 @@
   <title>AVAX Token Swapper (WalletConnect)</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script type="module">
-    import { EthereumClient, w3mConnectors, w3mProvider } from 'https://unpkg.com/@web3modal/ethereum?module';
-    import { Web3Modal } from 'https://unpkg.com/@web3modal/html?module';
-    import { configureChains, createClient } from 'https://unpkg.com/@wagmi/core?module';
-    import { avalanche } from 'https://unpkg.com/@wagmi/core/chains?module';
-
+  <script defer>
     const projectId = 'c03b6a909922b731fa377f3e996455d5';
-    const { chains, provider } = configureChains([avalanche], [w3mProvider({ projectId })]);
-    const wagmiClient = createClient({
-      autoConnect: true,
-      connectors: w3mConnectors({ projectId, version: '2', chains }),
-      provider
-    });
-    const ethereumClient = new EthereumClient(wagmiClient, chains);
-    const web3Modal = new Web3Modal({ projectId, themeMode: 'light' }, ethereumClient);
-
     const TOKENS = {
       AVAX: {
         address: null,
@@ -35,33 +21,44 @@
 
     const WAVAX = '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7';
     const routerAddress = '0x60aE616a2155Ee3d9A68541Ba4544862310933d4';
-    const abi = ["function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)",
-                 "function swapExactTokensForAVAX(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) returns (uint[] memory amounts)"];
+    const abi = [
+      "function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)",
+      "function swapExactTokensForAVAX(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) returns (uint[] memory amounts)",
+      "function approve(address spender, uint256 amount) public returns (bool)"
+    ];
 
-    let signer;
+    let provider, signer, web3ModalInstance, web3Provider;
     let fromToken = 'AVAX';
     let toToken = 'USDC';
 
-    document.addEventListener('DOMContentLoaded', () => {
-      const connectBtn = document.getElementById('connect');
-      const swapBtn = document.getElementById('swap');
-      const walletAddress = document.getElementById('walletAddress');
-      const status = document.getElementById('status');
-      const flipBtn = document.getElementById('flip');
+    document.addEventListener('DOMContentLoaded', async () => {
+      const { Web3Modal } = await import('https://unpkg.com/@web3modal/html@2.6.2/dist/index.js');
+      const { WalletConnectProvider } = await import('https://unpkg.com/@walletconnect/ethereum-provider@2.9.1/dist/index.js');
 
-      connectBtn.onclick = async () => {
-        await web3Modal.openModal();
-        signer = await getSigner();
-        const address = await signer.getAddress();
-        walletAddress.innerText = `Connected: ${address}`;
+      web3ModalInstance = new Web3Modal({
+        projectId,
+        walletConnectVersion: 2,
+        themeMode: 'light'
+      });
+
+      document.getElementById('connect').onclick = async () => {
+        try {
+          web3Provider = await web3ModalInstance.connect();
+          provider = new ethers.providers.Web3Provider(web3Provider);
+          signer = provider.getSigner();
+          const address = await signer.getAddress();
+          document.getElementById('walletAddress').innerText = `Connected: ${address}`;
+        } catch (err) {
+          console.error('Wallet connection failed:', err);
+        }
       };
 
-      flipBtn.onclick = () => {
+      document.getElementById('flip').onclick = () => {
         [fromToken, toToken] = [toToken, fromToken];
         updateTokenLabels();
       };
 
-      swapBtn.onclick = async () => {
+      document.getElementById('swap').onclick = async () => {
         if (!signer) return alert("Connect wallet first");
 
         const inputAmount = document.getElementById('amount').value;
@@ -78,16 +75,16 @@
             const path = [WAVAX, TOKENS[toToken].address];
             tx = await router.swapExactAVAXForTokens(0, path, to, deadline, { value: amountIn });
           } else {
-            const path = [TOKENS[fromToken].address, WAVAX];
-            const tokenContract = new ethers.Contract(TOKENS[fromToken].address, ["function approve(address spender, uint256 amount) public returns (bool)"], signer);
+            const tokenContract = new ethers.Contract(TOKENS[fromToken].address, abi, signer);
             await tokenContract.approve(routerAddress, amountIn);
+            const path = [TOKENS[fromToken].address, WAVAX];
             tx = await router.swapExactTokensForAVAX(amountIn, 0, path, to, deadline);
           }
-          status.innerText = `Swapping... TX: ${tx.hash}`;
+          document.getElementById('status').innerText = `Swapping... TX: ${tx.hash}`;
           await tx.wait();
-          status.innerText = `✅ Swap complete!`;
+          document.getElementById('status').innerText = `✅ Swap complete!`;
         } catch (err) {
-          status.innerText = `❌ ${err.message}`;
+          document.getElementById('status').innerText = `❌ ${err.message}`;
         }
       };
 
@@ -97,12 +94,6 @@
     function updateTokenLabels() {
       document.getElementById('fromLabel').innerText = `From (${TOKENS[fromToken].symbol})`;
       document.getElementById('toLabel').innerText = `To (${TOKENS[toToken].symbol})`;
-    }
-
-    async function getSigner() {
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      return provider.getSigner();
     }
   </script>
 </head>
