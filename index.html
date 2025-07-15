@@ -51,17 +51,17 @@
       AVAX: {
         symbol: "AVAX",
         address: null,
-        logo: "https://cryptologos.cc/logos/avalanche-avax-logo.png"
+        logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png"
       },
       "USDC.e": {
         symbol: "USDC.e",
         address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
-        logo: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png"
+        logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/assets/0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E/logo.png"
       },
       "DAI.e": {
         symbol: "DAI.e",
         address: "0xd586E7F844cEa2F87f50152665BCbc2C279D8d70",
-        logo: "https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.png"
+        logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/assets/0xd586E7F844cEa2F87f50152665BCbc2C279D8d70/logo.png"
       }
     };
 
@@ -105,19 +105,26 @@
       for (const [key, token] of Object.entries(TOKENS)) {
         let balance = "0.0000";
 
-        if (!token.address) {
-          const raw = await provider.getBalance(address);
-          balance = parseFloat(ethers.utils.formatEther(raw)).toFixed(4);
-        } else {
-          const contract = new ethers.Contract(token.address, erc20ABI, provider);
-          const raw = await contract.balanceOf(address);
-          const decimals = await contract.decimals();
-          balance = parseFloat(ethers.utils.formatUnits(raw, decimals)).toFixed(4);
+        try {
+          if (!token.address) {
+            const raw = await provider.getBalance(address);
+            balance = parseFloat(ethers.utils.formatEther(raw)).toFixed(4);
+          } else {
+            const contract = new ethers.Contract(token.address, erc20ABI, provider);
+            const raw = await contract.balanceOf(address);
+            const decimals = await contract.decimals();
+            balance = parseFloat(ethers.utils.formatUnits(raw, decimals)).toFixed(4);
+          }
+        } catch (err) {
+          balance = "0.0000";
         }
 
         const item = document.createElement("div");
         item.className = "flex items-center gap-2 px-4 py-2 hover:bg-gray-600 cursor-pointer";
-        item.innerHTML = `<img src="${token.logo}" alt="${key}" class="w-5 h-5"/> ${token.symbol} (${balance})`;
+        item.innerHTML = `
+          <img src="${token.logo}" alt="${key}" class="w-5 h-5" referrerpolicy="no-referrer" onerror="this.src='https://via.placeholder.com/20'" />
+          ${token.symbol} (${balance})
+        `;
         item.onclick = () => {
           fromToken = key;
           document.getElementById("fromLabel").innerText = `${token.symbol} (${balance})`;
