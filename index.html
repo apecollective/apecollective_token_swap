@@ -6,8 +6,8 @@
   <title>AVAX Token Swapper (WalletConnect)</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script defer>
-    const projectId = 'c03b6a909922b731fa377f3e996455d5';
+  <script src="https://unpkg.com/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js"></script>
+  <script>
     const TOKENS = {
       AVAX: {
         address: null,
@@ -27,74 +27,68 @@
       "function approve(address spender, uint256 amount) public returns (bool)"
     ];
 
-    let provider, signer, web3ModalInstance, web3Provider;
+    let provider, signer;
     let fromToken = 'AVAX';
     let toToken = 'USDC';
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      const { Web3Modal } = await import('https://unpkg.com/@web3modal/html@2.6.2/dist/index.js');
-      const { WalletConnectProvider } = await import('https://unpkg.com/@walletconnect/ethereum-provider@2.9.1/dist/index.js');
-
-      web3ModalInstance = new Web3Modal({
-        projectId,
-        walletConnectVersion: 2,
-        themeMode: 'light'
+    async function connectWallet() {
+      const wcProvider = new WalletConnectProvider.default({
+        rpc: {
+          43114: "https://api.avax.network/ext/bc/C/rpc"
+        },
+        chainId: 43114
       });
+      await wcProvider.enable();
+      provider = new ethers.providers.Web3Provider(wcProvider);
+      signer = provider.getSigner();
+      const address = await signer.getAddress();
+      document.getElementById('walletAddress').innerText = `Connected: ${address}`;
+    }
 
-      document.getElementById('connect').onclick = async () => {
-        try {
-          web3Provider = await web3ModalInstance.connect();
-          provider = new ethers.providers.Web3Provider(web3Provider);
-          signer = provider.getSigner();
-          const address = await signer.getAddress();
-          document.getElementById('walletAddress').innerText = `Connected: ${address}`;
-        } catch (err) {
-          console.error('Wallet connection failed:', err);
+    async function swapTokens() {
+      if (!signer) return alert("Connect wallet first");
+
+      const inputAmount = document.getElementById('amount').value;
+      if (!inputAmount || isNaN(inputAmount)) return alert("Enter valid amount");
+
+      const amountIn = ethers.utils.parseEther(inputAmount);
+      const router = new ethers.Contract(routerAddress, abi, signer);
+      const to = await signer.getAddress();
+      const deadline = Math.floor(Date.now() / 1000) + 600;
+
+      try {
+        let tx;
+        if (fromToken === 'AVAX') {
+          const path = [WAVAX, TOKENS[toToken].address];
+          tx = await router.swapExactAVAXForTokens(0, path, to, deadline, { value: amountIn });
+        } else {
+          const tokenContract = new ethers.Contract(TOKENS[fromToken].address, abi, signer);
+          await tokenContract.approve(routerAddress, amountIn);
+          const path = [TOKENS[fromToken].address, WAVAX];
+          tx = await router.swapExactTokensForAVAX(amountIn, 0, path, to, deadline);
         }
-      };
-
-      document.getElementById('flip').onclick = () => {
-        [fromToken, toToken] = [toToken, fromToken];
-        updateTokenLabels();
-      };
-
-      document.getElementById('swap').onclick = async () => {
-        if (!signer) return alert("Connect wallet first");
-
-        const inputAmount = document.getElementById('amount').value;
-        if (!inputAmount || isNaN(inputAmount)) return alert("Enter valid amount");
-
-        const amountIn = ethers.utils.parseEther(inputAmount);
-        const router = new ethers.Contract(routerAddress, abi, signer);
-        const to = await signer.getAddress();
-        const deadline = Math.floor(Date.now() / 1000) + 600;
-
-        try {
-          let tx;
-          if (fromToken === 'AVAX') {
-            const path = [WAVAX, TOKENS[toToken].address];
-            tx = await router.swapExactAVAXForTokens(0, path, to, deadline, { value: amountIn });
-          } else {
-            const tokenContract = new ethers.Contract(TOKENS[fromToken].address, abi, signer);
-            await tokenContract.approve(routerAddress, amountIn);
-            const path = [TOKENS[fromToken].address, WAVAX];
-            tx = await router.swapExactTokensForAVAX(amountIn, 0, path, to, deadline);
-          }
-          document.getElementById('status').innerText = `Swapping... TX: ${tx.hash}`;
-          await tx.wait();
-          document.getElementById('status').innerText = `✅ Swap complete!`;
-        } catch (err) {
-          document.getElementById('status').innerText = `❌ ${err.message}`;
-        }
-      };
-
-      updateTokenLabels();
-    });
+        document.getElementById('status').innerText = `Swapping... TX: ${tx.hash}`;
+        await tx.wait();
+        document.getElementById('status').innerText = `✅ Swap complete!`;
+      } catch (err) {
+        document.getElementById('status').innerText = `❌ ${err.message}`;
+      }
+    }
 
     function updateTokenLabels() {
       document.getElementById('fromLabel').innerText = `From (${TOKENS[fromToken].symbol})`;
       document.getElementById('toLabel').innerText = `To (${TOKENS[toToken].symbol})`;
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('connect').onclick = connectWallet;
+      document.getElementById('swap').onclick = swapTokens;
+      document.getElementById('flip').onclick = () => {
+        [fromToken, toToken] = [toToken, fromToken];
+        updateTokenLabels();
+      };
+      updateTokenLabels();
+    });
   </script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-6">
