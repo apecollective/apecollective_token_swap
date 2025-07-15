@@ -3,11 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AVAX Token Swapper (WalletConnect)</title>
+  <title>AVAX Token Swapper (WalletConnect v2)</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js"></script>
-  <script>
+  <script type="module">
+    import { Web3Modal } from 'https://unpkg.com/@web3modal/html@2.6.2/dist/index.js';
+    import { EthereumClient, w3mConnectors, w3mProvider } from 'https://unpkg.com/@web3modal/ethereum@2.6.2/dist/index.js';
+    import { configureChains, createClient } from 'https://unpkg.com/@wagmi/core@1.3.0/dist/index.js';
+    import { avalanche } from 'https://unpkg.com/@wagmi/core@1.3.0/chains/index.js';
+
+    const projectId = 'c03b6a909922b731fa377f3e996455d5'; // Replace with your actual WC Project ID
+    const { chains, provider } = configureChains([avalanche], [w3mProvider({ projectId })]);
+    const wagmiClient = createClient({
+      autoConnect: true,
+      connectors: w3mConnectors({ projectId, chains }),
+      provider
+    });
+    const ethereumClient = new EthereumClient(wagmiClient, chains);
+    const modal = new Web3Modal({ projectId }, ethereumClient);
+
     const TOKENS = {
       AVAX: {
         address: null,
@@ -27,30 +41,22 @@
       "function approve(address spender, uint256 amount) public returns (bool)"
     ];
 
-    let provider, signer;
+    let signer;
     let fromToken = 'AVAX';
     let toToken = 'USDC';
 
     async function connectWallet() {
-      const wcProvider = new WalletConnectProvider.default({
-        rpc: {
-          43114: "https://api.avax.network/ext/bc/C/rpc"
-        },
-        chainId: 43114
-      });
-      await wcProvider.enable();
-      provider = new ethers.providers.Web3Provider(wcProvider);
-      signer = provider.getSigner();
+      await modal.openModal();
+      const ethersProvider = new ethers.providers.Web3Provider(provider());
+      signer = ethersProvider.getSigner();
       const address = await signer.getAddress();
       document.getElementById('walletAddress').innerText = `Connected: ${address}`;
     }
 
     async function swapTokens() {
       if (!signer) return alert("Connect wallet first");
-
       const inputAmount = document.getElementById('amount').value;
       if (!inputAmount || isNaN(inputAmount)) return alert("Enter valid amount");
-
       const amountIn = ethers.utils.parseEther(inputAmount);
       const router = new ethers.Contract(routerAddress, abi, signer);
       const to = await signer.getAddress();
