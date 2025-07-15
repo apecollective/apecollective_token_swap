@@ -17,19 +17,24 @@
 
     <p id="account" class="text-sm text-center mb-4"></p>
 
-    <label for="fromToken" class="block text-sm mb-1">From Token</label>
-    <select id="fromToken" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white text-sm"></select>
+    <div class="mb-4">
+      <label class="block text-sm mb-1">From Token</label>
+      <div id="fromDropdown" class="bg-gray-700 rounded p-2 text-white cursor-pointer relative">
+        <span id="fromLabel">Select Token</span>
+        <div id="fromList" class="absolute bg-gray-800 w-full mt-1 rounded shadow-lg hidden z-10"></div>
+      </div>
+    </div>
 
-    <label for="toToken" class="block text-sm mb-1">To Token</label>
-    <select id="toToken" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white text-sm"></select>
+    <div class="mb-4">
+      <label class="block text-sm mb-1">To Token</label>
+      <div id="toDropdown" class="bg-gray-700 rounded p-2 text-white cursor-pointer relative">
+        <span id="toLabel">Select Token</span>
+        <div id="toList" class="absolute bg-gray-800 w-full mt-1 rounded shadow-lg hidden z-10"></div>
+      </div>
+    </div>
 
-    <label for="amount" class="block text-sm font-semibold mb-1">Amount to swap:</label>
-    <input
-      type="text"
-      id="amount"
-      placeholder="e.g. 0.1"
-      class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white"
-    />
+    <label class="block text-sm mb-1">Amount</label>
+    <input id="amount" placeholder="e.g. 0.1" class="w-full p-2 mb-4 rounded bg-gray-700 text-white border border-gray-600" />
 
     <button id="swap" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">
       Swap Now
@@ -43,10 +48,21 @@
     const WAVAX = "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7";
 
     const TOKENS = {
-      AVAX: { symbol: "AVAX", address: null },
-      "USDC.e": { symbol: "USDC.e", address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E" },
-      "DAI.e": { symbol: "DAI.e", address: "0xd586E7F844cEa2F87f50152665BCbc2C279D8d70" },
-      "WETH.e": { symbol: "WETH.e", address: "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB" }
+      AVAX: {
+        symbol: "AVAX",
+        address: null,
+        logo: "https://cryptologos.cc/logos/avalanche-avax-logo.png"
+      },
+      "USDC.e": {
+        symbol: "USDC.e",
+        address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
+        logo: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png"
+      },
+      "DAI.e": {
+        symbol: "DAI.e",
+        address: "0xd586E7F844cEa2F87f50152665BCbc2C279D8d70",
+        logo: "https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.png"
+      }
     };
 
     const swapABI = [
@@ -61,6 +77,8 @@
     ];
 
     let provider, signer, router;
+    let fromToken = "AVAX";
+    let toToken = "USDC.e";
 
     async function connectWallet() {
       if (!window.ethereum) {
@@ -72,74 +90,73 @@
       await provider.send("eth_requestAccounts", []);
       signer = provider.getSigner();
       router = new ethers.Contract(routerAddress, swapABI, signer);
-
       const address = await signer.getAddress();
       document.getElementById("account").innerText = `Connected: ${address}`;
       await populateDropdownsWithBalances();
     }
 
     async function populateDropdownsWithBalances() {
-      const userAddress = await signer.getAddress();
-      const fromSel = document.getElementById("fromToken");
-      const toSel = document.getElementById("toToken");
-
-      fromSel.innerHTML = "";
-      toSel.innerHTML = "";
+      const address = await signer.getAddress();
+      const fromList = document.getElementById("fromList");
+      const toList = document.getElementById("toList");
+      fromList.innerHTML = "";
+      toList.innerHTML = "";
 
       for (const [key, token] of Object.entries(TOKENS)) {
-        let balanceText = "";
+        let balance = "0.0000";
 
         if (!token.address) {
-          const balance = await provider.getBalance(userAddress);
-          const eth = ethers.utils.formatEther(balance);
-          balanceText = parseFloat(eth).toFixed(4);
+          const raw = await provider.getBalance(address);
+          balance = parseFloat(ethers.utils.formatEther(raw)).toFixed(4);
         } else {
           const contract = new ethers.Contract(token.address, erc20ABI, provider);
-          const raw = await contract.balanceOf(userAddress);
+          const raw = await contract.balanceOf(address);
           const decimals = await contract.decimals();
-          balanceText = parseFloat(ethers.utils.formatUnits(raw, decimals)).toFixed(4);
+          balance = parseFloat(ethers.utils.formatUnits(raw, decimals)).toFixed(4);
         }
 
-        const label = `${token.symbol} (${balanceText})`;
+        const item = document.createElement("div");
+        item.className = "flex items-center gap-2 px-4 py-2 hover:bg-gray-600 cursor-pointer";
+        item.innerHTML = `<img src="${token.logo}" alt="${key}" class="w-5 h-5"/> ${token.symbol} (${balance})`;
+        item.onclick = () => {
+          fromToken = key;
+          document.getElementById("fromLabel").innerText = `${token.symbol} (${balance})`;
+          fromList.classList.add("hidden");
+        };
+        fromList.appendChild(item);
 
-        const optionFrom = document.createElement("option");
-        optionFrom.value = key;
-        optionFrom.text = label;
-        fromSel.appendChild(optionFrom);
-
-        const optionTo = document.createElement("option");
-        optionTo.value = key;
-        optionTo.text = label;
-        toSel.appendChild(optionTo);
+        const item2 = item.cloneNode(true);
+        item2.onclick = () => {
+          toToken = key;
+          document.getElementById("toLabel").innerText = `${token.symbol} (${balance})`;
+          toList.classList.add("hidden");
+        };
+        toList.appendChild(item2);
       }
 
-      fromSel.value = "AVAX";
-      toSel.value = "USDC.e";
+      document.getElementById("fromLabel").innerText = `AVAX`;
+      document.getElementById("toLabel").innerText = `USDC.e`;
     }
 
     async function swapTokens() {
-      const from = document.getElementById("fromToken").value;
-      const to = document.getElementById("toToken").value;
       const input = document.getElementById("amount").value;
-
       if (!input || isNaN(input)) return alert("Enter a valid amount");
-
       const amountIn = ethers.utils.parseEther(input);
       const user = await signer.getAddress();
       const deadline = Math.floor(Date.now() / 1000) + 600;
-      let tx;
 
       try {
-        if (from === "AVAX") {
-          const path = [WAVAX, TOKENS[to].address];
+        let tx;
+        if (fromToken === "AVAX") {
+          const path = [WAVAX, TOKENS[toToken].address];
           tx = await router.swapExactAVAXForTokens(0, path, user, deadline, { value: amountIn });
-        } else if (to === "AVAX") {
-          const token = new ethers.Contract(TOKENS[from].address, swapABI, signer);
+        } else if (toToken === "AVAX") {
+          const token = new ethers.Contract(TOKENS[fromToken].address, swapABI, signer);
           await token.approve(routerAddress, amountIn);
-          const path = [TOKENS[from].address, WAVAX];
+          const path = [TOKENS[fromToken].address, WAVAX];
           tx = await router.swapExactTokensForAVAX(amountIn, 0, path, user, deadline);
         } else {
-          alert("Only AVAX → Token or Token → AVAX supported");
+          alert("Only AVAX <-> Token supported for now.");
           return;
         }
 
@@ -154,6 +171,8 @@
 
     document.getElementById("connect").onclick = connectWallet;
     document.getElementById("swap").onclick = swapTokens;
+    document.getElementById("fromDropdown").onclick = () => document.getElementById("fromList").classList.toggle("hidden");
+    document.getElementById("toDropdown").onclick = () => document.getElementById("toList").classList.toggle("hidden");
   </script>
 </body>
 </html>
