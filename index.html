@@ -1,98 +1,105 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" >
 <head>
   <meta charset="UTF-8" />
-  <title>AVAX Token Swapper</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trader Joe AVAX Token Swapper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-6">
+
   <div class="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg">
-    <h2 class="text-2xl font-bold mb-6 text-center">AVAX Token Swapper</h2>
+    <h1 class="text-3xl font-bold mb-6 text-center">Trader Joe AVAX Swapper</h1>
 
-    <button id="connect" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full mb-4">
-      Connect Wallet
-    </button>
+    <button id="connectBtn" class="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded mb-4">Connect Wallet</button>
+    <p id="account" class="text-center text-sm mb-6"></p>
 
-    <p id="account" class="text-sm text-center mb-4"></p>
-
-    <div class="mb-4">
-      <label class="block text-sm mb-1">From Token</label>
-      <div id="fromDropdown" class="bg-gray-700 rounded p-2 text-white cursor-pointer relative">
-        <span id="fromLabel">Select Token</span>
-        <div id="fromList" class="absolute bg-gray-800 w-full mt-1 rounded shadow-lg hidden z-10"></div>
+    <div>
+      <label class="block mb-1">From Token</label>
+      <div id="fromDropdown" class="bg-gray-700 rounded p-2 cursor-pointer relative mb-4">
+        <span id="fromLabel" class="flex items-center gap-2">Select token</span>
+        <div id="fromList" class="absolute top-full left-0 right-0 bg-gray-800 rounded mt-1 shadow-lg max-h-48 overflow-auto hidden z-10"></div>
       </div>
     </div>
 
-    <div class="mb-4">
-      <label class="block text-sm mb-1">To Token</label>
-      <div id="toDropdown" class="bg-gray-700 rounded p-2 text-white cursor-pointer relative">
-        <span id="toLabel">Select Token</span>
-        <div id="toList" class="absolute bg-gray-800 w-full mt-1 rounded shadow-lg hidden z-10"></div>
+    <div>
+      <label class="block mb-1">To Token</label>
+      <div id="toDropdown" class="bg-gray-700 rounded p-2 cursor-pointer relative mb-4">
+        <span id="toLabel" class="flex items-center gap-2">Select token</span>
+        <div id="toList" class="absolute top-full left-0 right-0 bg-gray-800 rounded mt-1 shadow-lg max-h-48 overflow-auto hidden z-10"></div>
       </div>
     </div>
 
-    <label class="block text-sm mb-1">Amount</label>
-    <input id="amount" placeholder="e.g. 0.1" class="w-full p-2 mb-2 rounded bg-gray-700 text-white border border-gray-600" />
+    <label class="block mb-1">Amount</label>
+    <input id="amountInput" type="number" min="0" step="any" placeholder="0.1" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white" />
 
-    <p id="priceEstimate" class="text-sm text-gray-400 mb-4 text-center"></p>
+    <p id="priceEstimate" class="text-gray-400 text-center mb-4"></p>
 
-    <button id="swap" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">
-      Swap Now
-    </button>
+    <button id="swapBtn" class="w-full bg-green-600 hover:bg-green-700 py-2 rounded disabled:opacity-50" disabled>Swap Now</button>
 
-    <p id="status" class="text-sm mt-4 text-center"></p>
+    <p id="status" class="text-center mt-4"></p>
   </div>
 
   <script>
-    const routerAddress = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4";
+    // Trader Joe Router Address & WAVAX token address on Avalanche
+    const ROUTER_ADDRESS = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4";
     const WAVAX = "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7";
 
+    // ERC20 ABI (minimal)
+    const ERC20_ABI = [
+      "function balanceOf(address) view returns (uint256)",
+      "function decimals() view returns (uint8)",
+      "function approve(address spender, uint256 amount) returns (bool)"
+    ];
+
+    // Router ABI (only required functions)
+    const ROUTER_ABI = [
+      "function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)",
+      "function swapExactTokensForAVAX(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) returns (uint[] memory amounts)",
+      "function getAmountsOut(uint amountIn, address[] memory path) view returns (uint[] memory amounts)"
+    ];
+
+    // Tokens supported
     const TOKENS = {
       AVAX: {
         symbol: "AVAX",
         address: null,
-        logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png"
+        logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/info/logo.png",
       },
       "USDC.e": {
         symbol: "USDC.e",
         address: "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E",
-        logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/assets/0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E/logo.png"
+        logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/assets/0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E/logo.png",
       },
       "DAI.e": {
         symbol: "DAI.e",
         address: "0xd586E7F844cEa2F87f50152665BCbc2C279D8d70",
-        logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/assets/0xd586E7F844cEa2F87f50152665BCbc2C279D8d70/logo.png"
+        logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/assets/0xd586E7F844cEa2F87f50152665BCbc2C279D8d70/logo.png",
       },
-      "WBTC.e": {
-        symbol: "WBTC.e",
-        address: "0x50b7545627a5162F82A992c33b87aDc75187B218",
-        logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/assets/0x50b7545627a5162F82A992c33b87aDc75187B218/logo.png"
-      },
-      "LINK.e": {
-        symbol: "LINK.e",
-        address: "0x5947BB275c521040051D82396192181b413227A3",
-        logo: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/avalanchec/assets/0x5947BB275c521040051D82396192181b413227A3/logo.png"
-      }
     };
 
-    const swapABI = [
-      "function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)",
-      "function swapExactTokensForAVAX(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) returns (uint[] memory amounts)",
-      "function approve(address spender, uint256 amount) public returns (bool)",
-      "function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)"
-    ];
-
-    const erc20ABI = [
-      "function balanceOf(address owner) view returns (uint256)",
-      "function decimals() view returns (uint8)"
-    ];
-
+    // Globals
     let provider, signer, router;
+    let userAddress = null;
     let fromToken = "AVAX";
     let toToken = "USDC.e";
 
+    // UI elements
+    const connectBtn = document.getElementById("connectBtn");
+    const accountP = document.getElementById("account");
+    const fromDropdown = document.getElementById("fromDropdown");
+    const toDropdown = document.getElementById("toDropdown");
+    const fromList = document.getElementById("fromList");
+    const toList = document.getElementById("toList");
+    const fromLabel = document.getElementById("fromLabel");
+    const toLabel = document.getElementById("toLabel");
+    const amountInput = document.getElementById("amountInput");
+    const priceEstimate = document.getElementById("priceEstimate");
+    const swapBtn = document.getElementById("swapBtn");
+    const statusP = document.getElementById("status");
+
+    // Connect wallet and load balances
     async function connectWallet() {
       if (!window.ethereum) {
         alert("Please install MetaMask!");
@@ -102,132 +109,209 @@
       provider = new ethers.providers.Web3Provider(window.ethereum);
       await provider.send("eth_requestAccounts", []);
       signer = provider.getSigner();
-      router = new ethers.Contract(routerAddress, swapABI, signer);
-      const address = await signer.getAddress();
-      document.getElementById("account").innerText = `Connected: ${address}`;
-      await populateDropdownsWithBalances();
-      estimatePrice();
+      userAddress = await signer.getAddress();
+
+      router = new ethers.Contract(ROUTER_ADDRESS, ROUTER_ABI, signer);
+
+      accountP.textContent = `Connected: ${userAddress}`;
+
+      connectBtn.disabled = true;
+      await updateBalances();
+      enableSwapIfReady();
     }
 
-    async function populateDropdownsWithBalances() {
-      const address = await signer.getAddress();
-      const fromList = document.getElementById("fromList");
-      const toList = document.getElementById("toList");
+    // Update token balances and populate dropdowns
+    async function updateBalances() {
       fromList.innerHTML = "";
       toList.innerHTML = "";
 
-      for (const [key, token] of Object.entries(TOKENS)) {
+      for (const key of Object.keys(TOKENS)) {
+        const token = TOKENS[key];
         let balance = "0.0000";
 
         try {
           if (!token.address) {
-            const raw = await provider.getBalance(address);
-            balance = parseFloat(ethers.utils.formatEther(raw)).toFixed(4);
+            // AVAX balance
+            const rawBal = await provider.getBalance(userAddress);
+            balance = parseFloat(ethers.utils.formatEther(rawBal)).toFixed(4);
           } else {
-            const contract = new ethers.Contract(token.address, erc20ABI, provider);
-            const raw = await contract.balanceOf(address);
+            // ERC20 token balance
+            const contract = new ethers.Contract(token.address, ERC20_ABI, provider);
+            const rawBal = await contract.balanceOf(userAddress);
             const decimals = await contract.decimals();
-            balance = parseFloat(ethers.utils.formatUnits(raw, decimals)).toFixed(4);
+            balance = parseFloat(ethers.utils.formatUnits(rawBal, decimals)).toFixed(4);
           }
         } catch (err) {
           balance = "0.0000";
         }
 
-        const item = document.createElement("div");
-        item.className = "flex items-center gap-2 px-4 py-2 hover:bg-gray-600 cursor-pointer";
-        item.innerHTML = `
-          <img src="${token.logo}" alt="${key}" class="w-5 h-5" referrerpolicy="no-referrer" onerror="this.src='https://via.placeholder.com/20'" />
-          ${token.symbol} (${balance})
-        `;
-        item.onclick = () => {
-          fromToken = key;
-          document.getElementById("fromLabel").innerText = `${token.symbol} (${balance})`;
-          document.getElementById("fromList").classList.add("hidden");
-          estimatePrice();
-        };
-        fromList.appendChild(item);
+        // Create dropdown item
+        const itemFrom = createDropdownItem(token, balance, key, true);
+        const itemTo = createDropdownItem(token, balance, key, false);
 
-        const item2 = item.cloneNode(true);
-        item2.onclick = () => {
-          toToken = key;
-          document.getElementById("toLabel").innerText = `${token.symbol} (${balance})`;
-          document.getElementById("toList").classList.add("hidden");
-          estimatePrice();
-        };
-        toList.appendChild(item2);
+        fromList.appendChild(itemFrom);
+        toList.appendChild(itemTo);
       }
 
-      document.getElementById("fromLabel").innerText = `AVAX`;
-      document.getElementById("toLabel").innerText = `USDC.e`;
+      // Set defaults
+      setFromToken(fromToken);
+      setToToken(toToken);
     }
 
-    async function estimatePrice() {
-      const amountInput = document.getElementById("amount").value;
-      const estimateBox = document.getElementById("priceEstimate");
+    function createDropdownItem(token, balance, key, isFromDropdown) {
+      const div = document.createElement("div");
+      div.className = "flex items-center gap-2 px-4 py-2 hover:bg-gray-600 cursor-pointer";
+      div.innerHTML = `<img src="${token.logo}" alt="${token.symbol}" class="w-5 h-5 rounded-full" referrerpolicy="no-referrer" onerror="this.src='https://via.placeholder.com/20'"/> ${token.symbol} (${balance})`;
+      div.onclick = () => {
+        if (isFromDropdown) setFromToken(key);
+        else setToToken(key);
+        hideDropdowns();
+        estimatePrice();
+      };
+      return div;
+    }
 
-      if (!amountInput || isNaN(amountInput)) {
-        estimateBox.innerText = "";
+    function setFromToken(key) {
+      fromToken = key;
+      const token = TOKENS[key];
+      fromLabel.innerHTML = `<img src="${token.logo}" alt="${token.symbol}" class="w-5 h-5 rounded-full" referrerpolicy="no-referrer" /> ${token.symbol}`;
+      enableSwapIfReady();
+    }
+
+    function setToToken(key) {
+      toToken = key;
+      const token = TOKENS[key];
+      toLabel.innerHTML = `<img src="${token.logo}" alt="${token.symbol}" class="w-5 h-5 rounded-full" referrerpolicy="no-referrer" /> ${token.symbol}`;
+      enableSwapIfReady();
+    }
+
+    function hideDropdowns() {
+      fromList.classList.add("hidden");
+      toList.classList.add("hidden");
+    }
+
+    fromDropdown.onclick = () => {
+      toList.classList.add("hidden");
+      fromList.classList.toggle("hidden");
+    };
+
+    toDropdown.onclick = () => {
+      fromList.classList.add("hidden");
+      toList.classList.toggle("hidden");
+    };
+
+    amountInput.oninput = estimatePrice;
+
+    // Enable swap button only if input is valid & tokens are selected & connected
+    function enableSwapIfReady() {
+      const amount = parseFloat(amountInput.value);
+      swapBtn.disabled = !userAddress || !fromToken || !toToken || fromToken === toToken || !amount || amount <= 0;
+    }
+
+    amountInput.addEventListener("input", () => {
+      enableSwapIfReady();
+      estimatePrice();
+    });
+
+    swapBtn.onclick = async () => {
+      if (!userAddress) {
+        alert("Connect wallet first");
         return;
       }
 
-      const inputAmount = ethers.utils.parseEther(amountInput);
-      const path = fromToken === "AVAX"
-        ? [WAVAX, TOKENS[toToken].address]
-        : toToken === "AVAX"
-        ? [TOKENS[fromToken].address, WAVAX]
-        : null;
+      if (fromToken === toToken) {
+        alert("From and To tokens must be different");
+        return;
+      }
 
-      if (!path) {
-        estimateBox.innerText = "Only AVAX <-> Token supported";
+      const amount = amountInput.value;
+      if (!amount || isNaN(amount) || amount <= 0) {
+        alert("Enter a valid amount");
         return;
       }
 
       try {
-        const amountsOut = await router.getAmountsOut(inputAmount, path);
-        const output = ethers.utils.formatEther(amountsOut[1]);
-        estimateBox.innerText = `Estimated: ${output} ${toToken}`;
-      } catch (err) {
-        estimateBox.innerText = "Could not estimate output.";
-      }
-    }
+        swapBtn.disabled = true;
+        statusP.textContent = "Swapping... Please confirm transaction in wallet.";
 
-    async function swapTokens() {
-      const input = document.getElementById("amount").value;
-      if (!input || isNaN(input)) return alert("Enter a valid amount");
-      const amountIn = ethers.utils.parseEther(input);
-      const user = await signer.getAddress();
-      const deadline = Math.floor(Date.now() / 1000) + 600;
+        const amountIn = ethers.utils.parseEther(amount);
+        const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 minutes
 
-      try {
         let tx;
+
         if (fromToken === "AVAX") {
+          // Swap AVAX to Token
           const path = [WAVAX, TOKENS[toToken].address];
-          tx = await router.swapExactAVAXForTokens(0, path, user, deadline, { value: amountIn });
+          tx = await router.swapExactAVAXForTokens(
+            0, // amountOutMin: 0 = no slippage protection, increase for production
+            path,
+            userAddress,
+            deadline,
+            { value: amountIn }
+          );
         } else if (toToken === "AVAX") {
-          const token = new ethers.Contract(TOKENS[fromToken].address, swapABI, signer);
-          await token.approve(routerAddress, amountIn);
+          // Swap Token to AVAX
+          const tokenContract = new ethers.Contract(TOKENS[fromToken].address, ERC20_ABI, signer);
+          // Approve router to spend tokens
+          const approvalTx = await tokenContract.approve(ROUTER_ADDRESS, amountIn);
+          statusP.textContent = "Approving tokens...";
+          await approvalTx.wait();
+
           const path = [TOKENS[fromToken].address, WAVAX];
-          tx = await router.swapExactTokensForAVAX(amountIn, 0, path, user, deadline);
+          tx = await router.swapExactTokensForAVAX(
+            amountIn,
+            0, // amountOutMin
+            path,
+            userAddress,
+            deadline
+          );
         } else {
-          alert("Only AVAX <-> Token supported for now.");
+          alert("Currently only AVAX <> Token swaps are supported.");
+          swapBtn.disabled = false;
           return;
         }
 
-        document.getElementById("status").innerText = `Swapping... TX: ${tx.hash}`;
+        statusP.textContent = `Transaction sent: ${tx.hash}`;
         await tx.wait();
-        document.getElementById("status").innerText = "✅ Swap complete!";
-        await populateDropdownsWithBalances();
-        estimatePrice();
+        statusP.textContent = "✅ Swap completed successfully!";
+        await updateBalances();
+        amountInput.value = "";
+        priceEstimate.textContent = "";
+      } catch (error) {
+        statusP.textContent = `❌ Swap failed: ${error.message || error}`;
+      }
+      swapBtn.disabled = false;
+    };
+
+    // Estimate price function
+    async function estimatePrice() {
+      priceEstimate.textContent = "";
+      if (!userAddress || !fromToken || !toToken) return;
+      const amount = amountInput.value;
+      if (!amount || isNaN(amount) || amount <= 0) return;
+
+      try {
+        const amountIn = ethers.utils.parseEther(amount);
+        let path;
+        if (fromToken === "AVAX") {
+          path = [WAVAX, TOKENS[toToken].address];
+        } else if (toToken === "AVAX") {
+          path = [TOKENS[fromToken].address, WAVAX];
+        } else {
+          priceEstimate.textContent = "Price estimate only for AVAX <> Token swaps.";
+          return;
+        }
+        const amountsOut = await router.getAmountsOut(amountIn, path);
+        const outAmount = ethers.utils.formatEther(amountsOut[1]);
+        priceEstimate.textContent = `Estimated output: ${parseFloat(outAmount).toFixed(6)} ${toToken}`;
       } catch (err) {
-        document.getElementById("status").innerText = `❌ ${err.message}`;
+        priceEstimate.textContent = "Could not estimate price.";
       }
     }
 
-    document.getElementById("connect").onclick = connectWallet;
-    document.getElementById("swap").onclick = swapTokens;
-    document.getElementById("fromDropdown").onclick = () => document.getElementById("fromList").classList.toggle("hidden");
-    document.getElementById("toDropdown").onclick = () => document.getElementById("toList").classList.toggle("hidden");
-    document.getElementById("amount").addEventListener("input", estimatePrice);
+    connectBtn.onclick = connectWallet;
+
   </script>
+
 </body>
 </html>
