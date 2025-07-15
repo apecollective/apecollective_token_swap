@@ -1,22 +1,41 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
   <title>AVAX Token Swapper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Tailwind CSS CDN for quick styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Ethers.js -->
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 </head>
-<body style="font-family: sans-serif;">
-  <h2>Swap AVAX → USDC.e (Trader Joe)</h2>
-  <button id="connect">Connect Wallet</button>
-  <p id="account"></p>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
 
-  <label>Amount of AVAX to swap:</label>
-  <input type="text" id="amount" placeholder="e.g. 0.1">
-  <button id="swap">Swap Now</button>
+  <div class="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg">
+    <h2 class="text-2xl font-bold mb-6 text-center">Swap AVAX → USDC.e (Trader Joe)</h2>
 
-  <p id="status"></p>
+    <button id="connect" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full mb-4">
+      Connect Wallet
+    </button>
+    <p id="account" class="text-sm text-center mb-6"></p>
+
+    <label for="amount" class="block text-sm font-semibold mb-2">Amount of AVAX to swap:</label>
+    <input
+      type="text"
+      id="amount"
+      placeholder="e.g. 0.1"
+      class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white"
+    />
+
+    <button id="swap" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded w-full">
+      Swap Now
+    </button>
+
+    <p id="status" class="text-sm mt-4 text-center"></p>
+  </div>
 
   <script>
-    const routerAddress = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4"; // JoeRouter02
+    const routerAddress = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4"; // Trader Joe Router
     const USDC = "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E"; // USDC.e
     const WAVAX = "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7"; // Wrapped AVAX
 
@@ -50,10 +69,10 @@
       }
 
       const amountIn = ethers.utils.parseEther(inputAmount);
-      const amountOutMin = 0; // Accept any output (adjust in production)
+      const amountOutMin = 0; // Set slippage protection in production
       const path = [WAVAX, USDC];
       const to = await signer.getAddress();
-      const deadline = Math.floor(Date.now() / 1000) + 60 * 10;
+      const deadline = Math.floor(Date.now() / 1000) + 600;
 
       try {
         const tx = await router.swapExactAVAXForTokens(
