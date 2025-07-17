@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" >
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <title>Trader Joe AVAX Token Swapper</title>
@@ -12,9 +12,11 @@
   <div class="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg">
     <h1 class="text-3xl font-bold mb-6 text-center">Trader Joe AVAX Swapper</h1>
 
-    <button id="connectBtn" class="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded mb-4">Connect Wallet</button>
+    <!-- Toggle Connect/Disconnect Button -->
+    <button id="walletBtn" class="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded mb-4">Connect Wallet</button>
     <p id="account" class="text-center text-sm mb-6"></p>
 
+    <!-- Token Selection -->
     <div>
       <label class="block mb-1">From Token</label>
       <div id="fromDropdown" class="bg-gray-700 rounded p-2 cursor-pointer relative mb-4">
@@ -31,6 +33,7 @@
       </div>
     </div>
 
+    <!-- Amount Input -->
     <label class="block mb-1">Amount</label>
     <input id="amountInput" type="number" min="0" step="any" placeholder="0.1" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white" />
 
@@ -42,25 +45,21 @@
   </div>
 
   <script>
-    // Trader Joe Router Address & WAVAX token address on Avalanche
     const ROUTER_ADDRESS = "0x60aE616a2155Ee3d9A68541Ba4544862310933d4";
     const WAVAX = "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7";
 
-    // ERC20 ABI (minimal)
     const ERC20_ABI = [
       "function balanceOf(address) view returns (uint256)",
       "function decimals() view returns (uint8)",
       "function approve(address spender, uint256 amount) returns (bool)"
     ];
 
-    // Router ABI (only required functions)
     const ROUTER_ABI = [
       "function swapExactAVAXForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) payable returns (uint[] memory amounts)",
       "function swapExactTokensForAVAX(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) returns (uint[] memory amounts)",
       "function getAmountsOut(uint amountIn, address[] memory path) view returns (uint[] memory amounts)"
     ];
 
-    // Tokens supported
     const TOKENS = {
       AVAX: {
         symbol: "AVAX",
@@ -79,14 +78,12 @@
       },
     };
 
-    // Globals
     let provider, signer, router;
     let userAddress = null;
     let fromToken = "AVAX";
     let toToken = "USDC.e";
 
-    // UI elements
-    const connectBtn = document.getElementById("connectBtn");
+    const walletBtn = document.getElementById("walletBtn");
     const accountP = document.getElementById("account");
     const fromDropdown = document.getElementById("fromDropdown");
     const toDropdown = document.getElementById("toDropdown");
@@ -99,7 +96,14 @@
     const swapBtn = document.getElementById("swapBtn");
     const statusP = document.getElementById("status");
 
-    // Connect wallet and load balances
+    walletBtn.onclick = async () => {
+      if (userAddress) {
+        disconnectWallet();
+      } else {
+        await connectWallet();
+      }
+    };
+
     async function connectWallet() {
       if (!window.ethereum) {
         alert("Please install MetaMask!");
@@ -114,13 +118,33 @@
       router = new ethers.Contract(ROUTER_ADDRESS, ROUTER_ABI, signer);
 
       accountP.textContent = `Connected: ${userAddress}`;
+      walletBtn.textContent = "Disconnect Wallet";
+      walletBtn.classList.replace("bg-blue-600", "bg-red-600");
+      walletBtn.classList.replace("hover:bg-blue-700", "hover:bg-red-700");
 
-      connectBtn.disabled = true;
       await updateBalances();
       enableSwapIfReady();
     }
 
-    // Update token balances and populate dropdowns
+    function disconnectWallet() {
+      provider = null;
+      signer = null;
+      userAddress = null;
+      router = null;
+
+      accountP.textContent = "";
+      walletBtn.textContent = "Connect Wallet";
+      walletBtn.classList.replace("bg-red-600", "bg-blue-600");
+      walletBtn.classList.replace("hover:bg-red-700", "hover:bg-blue-700");
+
+      fromLabel.textContent = "Select token";
+      toLabel.textContent = "Select token";
+      amountInput.value = "";
+      priceEstimate.textContent = "";
+      statusP.textContent = "";
+      swapBtn.disabled = true;
+    }
+
     async function updateBalances() {
       fromList.innerHTML = "";
       toList.innerHTML = "";
@@ -131,29 +155,24 @@
 
         try {
           if (!token.address) {
-            // AVAX balance
             const rawBal = await provider.getBalance(userAddress);
             balance = parseFloat(ethers.utils.formatEther(rawBal)).toFixed(4);
           } else {
-            // ERC20 token balance
             const contract = new ethers.Contract(token.address, ERC20_ABI, provider);
             const rawBal = await contract.balanceOf(userAddress);
             const decimals = await contract.decimals();
             balance = parseFloat(ethers.utils.formatUnits(rawBal, decimals)).toFixed(4);
           }
-        } catch (err) {
+        } catch {
           balance = "0.0000";
         }
 
-        // Create dropdown item
         const itemFrom = createDropdownItem(token, balance, key, true);
         const itemTo = createDropdownItem(token, balance, key, false);
-
         fromList.appendChild(itemFrom);
         toList.appendChild(itemTo);
       }
 
-      // Set defaults
       setFromToken(fromToken);
       setToToken(toToken);
     }
@@ -200,73 +219,45 @@
       toList.classList.toggle("hidden");
     };
 
-    amountInput.oninput = estimatePrice;
-
-    // Enable swap button only if input is valid & tokens are selected & connected
-    function enableSwapIfReady() {
-      const amount = parseFloat(amountInput.value);
-      swapBtn.disabled = !userAddress || !fromToken || !toToken || fromToken === toToken || !amount || amount <= 0;
-    }
-
     amountInput.addEventListener("input", () => {
       enableSwapIfReady();
       estimatePrice();
     });
 
-    swapBtn.onclick = async () => {
-      if (!userAddress) {
-        alert("Connect wallet first");
-        return;
-      }
+    function enableSwapIfReady() {
+      const amount = parseFloat(amountInput.value);
+      swapBtn.disabled = !userAddress || !fromToken || !toToken || fromToken === toToken || !amount || amount <= 0;
+    }
 
-      if (fromToken === toToken) {
-        alert("From and To tokens must be different");
-        return;
-      }
+    swapBtn.onclick = async () => {
+      if (!userAddress) return alert("Connect wallet first");
+      if (fromToken === toToken) return alert("From and To tokens must be different");
 
       const amount = amountInput.value;
-      if (!amount || isNaN(amount) || amount <= 0) {
-        alert("Enter a valid amount");
-        return;
-      }
+      if (!amount || isNaN(amount) || amount <= 0) return alert("Enter a valid amount");
 
       try {
         swapBtn.disabled = true;
         statusP.textContent = "Swapping... Please confirm transaction in wallet.";
 
         const amountIn = ethers.utils.parseEther(amount);
-        const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 minutes
+        const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
 
         let tx;
 
         if (fromToken === "AVAX") {
-          // Swap AVAX to Token
           const path = [WAVAX, TOKENS[toToken].address];
-          tx = await router.swapExactAVAXForTokens(
-            0, // amountOutMin: 0 = no slippage protection, increase for production
-            path,
-            userAddress,
-            deadline,
-            { value: amountIn }
-          );
+          tx = await router.swapExactAVAXForTokens(0, path, userAddress, deadline, { value: amountIn });
         } else if (toToken === "AVAX") {
-          // Swap Token to AVAX
           const tokenContract = new ethers.Contract(TOKENS[fromToken].address, ERC20_ABI, signer);
-          // Approve router to spend tokens
           const approvalTx = await tokenContract.approve(ROUTER_ADDRESS, amountIn);
           statusP.textContent = "Approving tokens...";
           await approvalTx.wait();
 
           const path = [TOKENS[fromToken].address, WAVAX];
-          tx = await router.swapExactTokensForAVAX(
-            amountIn,
-            0, // amountOutMin
-            path,
-            userAddress,
-            deadline
-          );
+          tx = await router.swapExactTokensForAVAX(amountIn, 0, path, userAddress, deadline);
         } else {
-          alert("Currently only AVAX <> Token swaps are supported.");
+          alert("Only AVAX <> Token swaps supported.");
           swapBtn.disabled = false;
           return;
         }
@@ -280,19 +271,21 @@
       } catch (error) {
         statusP.textContent = `❌ Swap failed: ${error.message || error}`;
       }
+
       swapBtn.disabled = false;
     };
 
-    // Estimate price function
     async function estimatePrice() {
       priceEstimate.textContent = "";
       if (!userAddress || !fromToken || !toToken) return;
+
       const amount = amountInput.value;
       if (!amount || isNaN(amount) || amount <= 0) return;
 
       try {
         const amountIn = ethers.utils.parseEther(amount);
         let path;
+
         if (fromToken === "AVAX") {
           path = [WAVAX, TOKENS[toToken].address];
         } else if (toToken === "AVAX") {
@@ -301,17 +294,14 @@
           priceEstimate.textContent = "Price estimate only for AVAX <> Token swaps.";
           return;
         }
+
         const amountsOut = await router.getAmountsOut(amountIn, path);
         const outAmount = ethers.utils.formatEther(amountsOut[1]);
         priceEstimate.textContent = `Estimated output: ${parseFloat(outAmount).toFixed(6)} ${toToken}`;
-      } catch (err) {
+      } catch {
         priceEstimate.textContent = "Could not estimate price.";
       }
     }
-
-    connectBtn.onclick = connectWallet;
-
   </script>
-
 </body>
 </html>
