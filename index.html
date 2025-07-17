@@ -6,17 +6,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script src="https://unpkg.com/web3modal"></script>
+  <script src="https://unpkg.com/@walletconnect/ethereum-provider"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-6">
 
   <div class="w-full max-w-md bg-gray-800 p-6 rounded-lg shadow-lg">
     <h1 class="text-3xl font-bold mb-6 text-center">Trader Joe AVAX Swapper</h1>
 
-    <!-- Toggle Connect/Disconnect Button -->
     <button id="walletBtn" class="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded mb-4">Connect Wallet</button>
     <p id="account" class="text-center text-sm mb-6"></p>
 
-    <!-- Token Selection -->
     <div>
       <label class="block mb-1">From Token</label>
       <div id="fromDropdown" class="bg-gray-700 rounded p-2 cursor-pointer relative mb-4">
@@ -33,7 +33,6 @@
       </div>
     </div>
 
-    <!-- Amount Input -->
     <label class="block mb-1">Amount</label>
     <input id="amountInput" type="number" min="0" step="any" placeholder="0.1" class="w-full p-2 mb-4 rounded bg-gray-700 border border-gray-600 text-white" />
 
@@ -78,8 +77,7 @@
       },
     };
 
-    let provider, signer, router;
-    let userAddress = null;
+    let web3Modal, provider, ethersProvider, signer, userAddress = null;
     let fromToken = "AVAX";
     let toToken = "USDC.e";
 
@@ -96,52 +94,73 @@
     const swapBtn = document.getElementById("swapBtn");
     const statusP = document.getElementById("status");
 
-    walletBtn.onclick = async () => {
-      if (userAddress) {
-        disconnectWallet();
-      } else {
-        await connectWallet();
+    window.addEventListener("load", initWeb3Modal);
+
+    function initWeb3Modal() {
+      web3Modal = new window.Web3Modal.default({
+        cacheProvider: true,
+        providerOptions: {
+          walletconnect: {
+            package: window.WalletConnectProvider.default,
+            options: {
+              rpc: { 43114: "https://api.avax.network/ext/bc/C/rpc" },
+              chainId: 43114
+            }
+          }
+        },
+        theme: "dark"
+      });
+
+      if (web3Modal.cachedProvider) {
+        connectWallet();
       }
-    };
 
-    async function connectWallet() {
-      if (!window.ethereum) {
-        alert("Please install MetaMask!");
-        return;
-      }
-
-      provider = new ethers.providers.Web3Provider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      signer = provider.getSigner();
-      userAddress = await signer.getAddress();
-
-      router = new ethers.Contract(ROUTER_ADDRESS, ROUTER_ABI, signer);
-
-      accountP.textContent = `Connected: ${userAddress}`;
-      walletBtn.textContent = "Disconnect Wallet";
-      walletBtn.classList.replace("bg-blue-600", "bg-red-600");
-      walletBtn.classList.replace("hover:bg-blue-700", "hover:bg-red-700");
-
-      await updateBalances();
-      enableSwapIfReady();
+      walletBtn.onclick = () => {
+        if (userAddress) {
+          disconnectWallet();
+        } else {
+          connectWallet();
+        }
+      };
     }
 
-    function disconnectWallet() {
-      provider = null;
-      signer = null;
-      userAddress = null;
-      router = null;
+    async function connectWallet() {
+      try {
+        provider = await web3Modal.connect();
+        ethersProvider = new ethers.providers.Web3Provider(provider);
+        signer = ethersProvider.getSigner();
+        userAddress = await signer.getAddress();
+
+        provider.on("accountsChanged", () => location.reload());
+        provider.on("disconnect", disconnectWallet);
+
+        accountP.textContent = `Connected: ${userAddress}`;
+        walletBtn.textContent = "Disconnect Wallet";
+        walletBtn.classList.replace("bg-blue-600", "bg-red-600");
+        walletBtn.classList.replace("hover:bg-blue-700", "hover:bg-red-700");
+
+        router = new ethers.Contract(ROUTER_ADDRESS, ROUTER_ABI, signer);
+        await updateBalances();
+        enableSwapIfReady();
+      } catch (err) {
+        console.error("Connection failed", err);
+      }
+    }
+
+    async function disconnectWallet() {
+      if (provider?.disconnect) await provider.disconnect();
+      await web3Modal.clearCachedProvider();
+
+      provider = signer = userAddress = router = null;
 
       accountP.textContent = "";
       walletBtn.textContent = "Connect Wallet";
       walletBtn.classList.replace("bg-red-600", "bg-blue-600");
       walletBtn.classList.replace("hover:bg-red-700", "hover:bg-blue-700");
-
       fromLabel.textContent = "Select token";
       toLabel.textContent = "Select token";
       amountInput.value = "";
       priceEstimate.textContent = "";
-      statusP.textContent = "";
       swapBtn.disabled = true;
     }
 
@@ -149,23 +168,21 @@
       fromList.innerHTML = "";
       toList.innerHTML = "";
 
-      for (const key of Object.keys(TOKENS)) {
+      for (const key in TOKENS) {
         const token = TOKENS[key];
         let balance = "0.0000";
 
         try {
           if (!token.address) {
-            const rawBal = await provider.getBalance(userAddress);
-            balance = parseFloat(ethers.utils.formatEther(rawBal)).toFixed(4);
+            const bal = await ethersProvider.getBalance(userAddress);
+            balance = parseFloat(ethers.utils.formatEther(bal)).toFixed(4);
           } else {
-            const contract = new ethers.Contract(token.address, ERC20_ABI, provider);
+            const contract = new ethers.Contract(token.address, ERC20_ABI, ethersProvider);
             const rawBal = await contract.balanceOf(userAddress);
             const decimals = await contract.decimals();
             balance = parseFloat(ethers.utils.formatUnits(rawBal, decimals)).toFixed(4);
           }
-        } catch {
-          balance = "0.0000";
-        }
+        } catch {}
 
         const itemFrom = createDropdownItem(token, balance, key, true);
         const itemTo = createDropdownItem(token, balance, key, false);
@@ -177,13 +194,12 @@
       setToToken(toToken);
     }
 
-    function createDropdownItem(token, balance, key, isFromDropdown) {
+    function createDropdownItem(token, balance, key, isFrom) {
       const div = document.createElement("div");
       div.className = "flex items-center gap-2 px-4 py-2 hover:bg-gray-600 cursor-pointer";
-      div.innerHTML = `<img src="${token.logo}" alt="${token.symbol}" class="w-5 h-5 rounded-full" referrerpolicy="no-referrer" onerror="this.src='https://via.placeholder.com/20'"/> ${token.symbol} (${balance})`;
+      div.innerHTML = `<img src="${token.logo}" class="w-5 h-5 rounded-full" /> ${token.symbol} (${balance})`;
       div.onclick = () => {
-        if (isFromDropdown) setFromToken(key);
-        else setToToken(key);
+        isFrom ? setFromToken(key) : setToToken(key);
         hideDropdowns();
         estimatePrice();
       };
@@ -192,15 +208,13 @@
 
     function setFromToken(key) {
       fromToken = key;
-      const token = TOKENS[key];
-      fromLabel.innerHTML = `<img src="${token.logo}" alt="${token.symbol}" class="w-5 h-5 rounded-full" referrerpolicy="no-referrer" /> ${token.symbol}`;
+      fromLabel.innerHTML = `<img src="${TOKENS[key].logo}" class="w-5 h-5 rounded-full" /> ${TOKENS[key].symbol}`;
       enableSwapIfReady();
     }
 
     function setToToken(key) {
       toToken = key;
-      const token = TOKENS[key];
-      toLabel.innerHTML = `<img src="${token.logo}" alt="${token.symbol}" class="w-5 h-5 rounded-full" referrerpolicy="no-referrer" /> ${token.symbol}`;
+      toLabel.innerHTML = `<img src="${TOKENS[key].logo}" class="w-5 h-5 rounded-full" /> ${TOKENS[key].symbol}`;
       enableSwapIfReady();
     }
 
@@ -213,7 +227,6 @@
       toList.classList.add("hidden");
       fromList.classList.toggle("hidden");
     };
-
     toDropdown.onclick = () => {
       fromList.classList.add("hidden");
       toList.classList.toggle("hidden");
@@ -226,7 +239,7 @@
 
     function enableSwapIfReady() {
       const amount = parseFloat(amountInput.value);
-      swapBtn.disabled = !userAddress || !fromToken || !toToken || fromToken === toToken || !amount || amount <= 0;
+      swapBtn.disabled = !userAddress || fromToken === toToken || !amount || amount <= 0;
     }
 
     swapBtn.onclick = async () => {
@@ -238,11 +251,10 @@
 
       try {
         swapBtn.disabled = true;
-        statusP.textContent = "Swapping... Please confirm transaction in wallet.";
+        statusP.textContent = "Swapping... Please confirm in wallet.";
 
         const amountIn = ethers.utils.parseEther(amount);
-        const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
-
+        const deadline = Math.floor(Date.now() / 1000) + 1200;
         let tx;
 
         if (fromToken === "AVAX") {
@@ -250,26 +262,22 @@
           tx = await router.swapExactAVAXForTokens(0, path, userAddress, deadline, { value: amountIn });
         } else if (toToken === "AVAX") {
           const tokenContract = new ethers.Contract(TOKENS[fromToken].address, ERC20_ABI, signer);
-          const approvalTx = await tokenContract.approve(ROUTER_ADDRESS, amountIn);
-          statusP.textContent = "Approving tokens...";
-          await approvalTx.wait();
-
+          await tokenContract.approve(ROUTER_ADDRESS, amountIn);
           const path = [TOKENS[fromToken].address, WAVAX];
           tx = await router.swapExactTokensForAVAX(amountIn, 0, path, userAddress, deadline);
         } else {
           alert("Only AVAX <> Token swaps supported.");
-          swapBtn.disabled = false;
           return;
         }
 
-        statusP.textContent = `Transaction sent: ${tx.hash}`;
+        statusP.textContent = `Tx sent: ${tx.hash}`;
         await tx.wait();
-        statusP.textContent = "✅ Swap completed successfully!";
+        statusP.textContent = "✅ Swap successful!";
         await updateBalances();
         amountInput.value = "";
         priceEstimate.textContent = "";
-      } catch (error) {
-        statusP.textContent = `❌ Swap failed: ${error.message || error}`;
+      } catch (err) {
+        statusP.textContent = `❌ Swap failed: ${err.message || err}`;
       }
 
       swapBtn.disabled = false;
@@ -278,7 +286,6 @@
     async function estimatePrice() {
       priceEstimate.textContent = "";
       if (!userAddress || !fromToken || !toToken) return;
-
       const amount = amountInput.value;
       if (!amount || isNaN(amount) || amount <= 0) return;
 
@@ -291,7 +298,7 @@
         } else if (toToken === "AVAX") {
           path = [TOKENS[fromToken].address, WAVAX];
         } else {
-          priceEstimate.textContent = "Price estimate only for AVAX <> Token swaps.";
+          priceEstimate.textContent = "Estimation only for AVAX <> Token swaps.";
           return;
         }
 
