@@ -1,7 +1,7 @@
 const connectBtn = document.getElementById("connectBtn");
 const accountP = document.getElementById("account");
 
-const projectId = "YOUR_PROJECT_ID"; // Replace with your actual WalletConnect project ID
+const projectId = "c03b6a909922b731fa377f3e996455d5"; // Replace with your actual WalletConnect project ID
 
 const web3Modal = new window.WalletConnectModal.default({
   projectId,
