@@ -2,18 +2,33 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>AVAX Swapper</title>
-    <script type="module" src="/main.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+    />
   </head>
   <body class="bg-gray-900 text-white flex justify-center items-center min-h-screen">
-    <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center w-full max-w-md">
+    <div
+      class="bg-gray-800 p-6 rounded-lg shadow-lg text-center w-full max-w-md"
+    >
       <h1 class="text-2xl font-bold mb-4">AVAX Wallet Connect</h1>
-      <button id="connectBtn" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded mb-2">
+      <button
+        id="connectBtn"
+        class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded mb-2"
+      >
         Connect Wallet
       </button>
       <p id="account" class="mt-2 text-sm text-gray-300"></p>
     </div>
+
+    <!-- Ethers.js v6 -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
+    <!-- Web3Modal -->
+    <script src="https://cdn.jsdelivr.net/npm/@web3modal/standalone@2.4.1/dist/index.umd.js"></script>
+    <!-- WalletConnect Provider -->
+    <script src="https://cdn.jsdelivr.net/npm/@walletconnect/ethereum-provider@2.8.7/dist/ethereum-provider.umd.min.js"></script>
+    <script type="module" src="/main.js"></script>
   </body>
 </html>
