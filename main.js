@@ -1,21 +1,12 @@
 const connectBtn = document.getElementById("connectBtn");
 const accountP = document.getElementById("account");
 
-// Your WalletConnect project ID here:
-const projectId = "YOUR_PROJECT_ID";
+const projectId = "YOUR_PROJECT_ID"; // Replace with your actual WalletConnect project ID
 
-const web3Modal = new window.Web3Modal({
+const web3Modal = new window.WalletConnectModal.default({
   projectId,
-  walletConnectVersion: 2,
-  themeMode: "dark",
-  chains: [
-    {
-      chainId: 43114,
-      name: "Avalanche C-Chain",
-      rpcUrl: "https://api.avax.network/ext/bc/C/rpc",
-      currency: "AVAX",
-    },
-  ],
+  standaloneChains: ["eip155:43114"], // Avalanche C-Chain
+  themeMode: "dark"
 });
 
 let provider = null;
@@ -24,14 +15,11 @@ let signer = null;
 async function connectWallet() {
   try {
     const instance = await web3Modal.connect();
-    provider = new window.ethers.BrowserProvider(instance);
+    provider = new ethers.BrowserProvider(instance);
     signer = await provider.getSigner();
     const address = await signer.getAddress();
     accountP.textContent = `Connected: ${address}`;
     connectBtn.textContent = "Disconnect Wallet";
-
-    instance.on("accountsChanged", () => window.location.reload());
-    instance.on("disconnect", () => disconnectWallet());
   } catch (e) {
     console.error("Connection failed:", e);
     accountP.textContent = "Connection failed: " + e.message;
@@ -39,10 +27,7 @@ async function connectWallet() {
 }
 
 async function disconnectWallet() {
-  if (provider?.provider?.disconnect) {
-    await provider.provider.disconnect();
-  }
-  await web3Modal.clearCachedProvider();
+  await web3Modal.clear();
   provider = null;
   signer = null;
   accountP.textContent = "";
@@ -57,6 +42,6 @@ connectBtn.addEventListener("click", () => {
   }
 });
 
-if (web3Modal.cachedProvider) {
+if (web3Modal.getIsConnected?.()) {
   connectWallet();
 }
