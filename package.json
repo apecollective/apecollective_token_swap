@@ -1,0 +1,19 @@
+{
+  "name": "avax-swapper",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^7.0.4"
+  },
+  "dependencies": {
+    "@walletconnect/ethereum-provider": "^2.21.5",
+    "@web3modal/standalone": "^2.4.3",
+    "ethers": "^6.15.0"
+  }
+}
