@@ -4,48 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AVAX Swapper</title>
+    <script type="module" src="/main.js"></script>
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
     />
-    <!-- Web3Modal Standalone UMD build -->
-    <script src="https://unpkg.com/@web3modal/standalone@2.4.1/dist/index.umd.js"></script>
-    <!-- Ethers v6 -->
-    <script src="https://cdn.jsdelivr.net/npm/ethers@6.6.0/dist/ethers.umd.min.js"></script>
+    <!-- Web3Modal styles -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/@web3modal/html@3.5.5/dist/style.css"
+    />
   </head>
   <body class="bg-gray-900 text-white flex justify-center items-center min-h-screen">
     <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center w-full max-w-md">
       <h1 class="text-2xl font-bold mb-4">AVAX Wallet Connect</h1>
-      <button
-        id="connectBtn"
-        class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded mb-2"
-      >
+      <button id="connectBtn" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded mb-2">
         Connect Wallet
       </button>
       <p id="account" class="mt-2 text-sm text-gray-300"></p>
     </div>
-
-    <script>
-      const projectId = "c03b6a909922b731fa377f3e996455d5"; // Replace with your WalletConnect Cloud project ID
-
-      const modal = window.WalletConnectModal.default.init({
-        projectId,
-        themeMode: "dark",
-        chains: [43114], // Avalanche C-Chain
-        enableAnalytics: false
-      });
-
-      document.getElementById("connectBtn").addEventListener("click", async () => {
-        try {
-          const provider = await modal.connect();
-          const ethersProvider = new window.ethers.BrowserProvider(provider);
-          const signer = await ethersProvider.getSigner();
-          const address = await signer.getAddress();
-          document.getElementById("account").textContent = `Connected: ${address}`;
-        } catch (err) {
-          console.error("Connection failed:", err);
-        }
-      });
-    </script>
   </body>
 </html>
