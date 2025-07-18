@@ -1,78 +1,74 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AVAX Swapper</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AVAX Wallet Connect</title>
 
-  <!-- Tailwind CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+    <!-- Tailwind CSS (CDN) -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 
-  <!-- WalletConnect Modal UMD -->
-  <script src="https://cdn.jsdelivr.net/npm/@web3modal/standalone@2.4.1/dist/index.umd.js"></script>
+    <!-- WalletConnect Web3Modal v2 (UMD) -->
+    <script src="https://unpkg.com/@web3modal/standalone@2.4.1/dist/index.umd.js"></script>
 
-  <!-- Ethers.js UMD -->
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
-</head>
-<body class="bg-gray-900 text-white flex justify-center items-center min-h-screen">
-  <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center w-full max-w-md">
-    <h1 class="text-2xl font-bold mb-4">AVAX Wallet Connect</h1>
-    <button id="connectBtn" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded mb-2">
-      Connect Wallet
-    </button>
-    <p id="account" class="mt-2 text-sm text-gray-300"></p>
-  </div>
+    <!-- Ethers v6 (UMD) -->
+    <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
+  </head>
+  <body class="bg-gray-900 text-white flex justify-center items-center min-h-screen">
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center w-full max-w-md">
+      <h1 class="text-2xl font-bold mb-4">AVAX Wallet Connect</h1>
+      <button id="connectBtn" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded mb-2">
+        Connect Wallet
+      </button>
+      <p id="account" class="mt-2 text-sm text-gray-300"></p>
+    </div>
 
-  <!-- Connect Wallet Logic -->
-  <script>
-    const connectBtn = document.getElementById("connectBtn");
-    const accountP = document.getElementById("account");
+    <script>
+      const connectBtn = document.getElementById("connectBtn");
+      const accountP = document.getElementById("account");
 
-    const projectId = "YOUR_PROJECT_ID"; // <-- Replace this with your actual WalletConnect Project ID
+      // 🔑 Replace with your actual WalletConnect project ID
+      const projectId = "c03b6a909922b731fa377f3e996455d5";
 
-    const web3Modal = new window.WalletConnectModal.default({
-      projectId,
-      standaloneChains: ["eip155:43114"], // Avalanche C-Chain
-      themeMode: "dark"
-    });
+      // Initialize Web3Modal
+      const web3Modal = new window.WalletConnectModal({
+        projectId,
+        standaloneChains: ["eip155:43114"], // Avalanche C-Chain
+        themeMode: "dark"
+      });
 
-    let provider = null;
-    let signer = null;
+      let provider = null;
+      let signer = null;
 
-    async function connectWallet() {
-      try {
-        const instance = await web3Modal.connect();
-        provider = new ethers.BrowserProvider(instance);
-        signer = await provider.getSigner();
-        const address = await signer.getAddress();
-        accountP.textContent = `Connected: ${address}`;
-        connectBtn.textContent = "Disconnect Wallet";
-      } catch (e) {
-        console.error("Connection failed:", e);
-        accountP.textContent = "Connection failed: " + e.message;
+      async function connectWallet() {
+        try {
+          const instance = await web3Modal.connect();
+          provider = new ethers.BrowserProvider(instance);
+          signer = await provider.getSigner();
+          const address = await signer.getAddress();
+          accountP.textContent = `Connected: ${address}`;
+          connectBtn.textContent = "Disconnect Wallet";
+        } catch (err) {
+          console.error("Connection failed:", err);
+          accountP.textContent = "Connection failed.";
+        }
       }
-    }
 
-    async function disconnectWallet() {
-      await web3Modal.clear();
-      provider = null;
-      signer = null;
-      accountP.textContent = "";
-      connectBtn.textContent = "Connect Wallet";
-    }
-
-    connectBtn.addEventListener("click", () => {
-      if (signer) {
-        disconnectWallet();
-      } else {
-        connectWallet();
+      async function disconnectWallet() {
+        await web3Modal.clear();
+        provider = null;
+        signer = null;
+        accountP.textContent = "";
+        connectBtn.textContent = "Connect Wallet";
       }
-    });
 
-    // Auto-connect if already connected
-    if (web3Modal.getIsConnected?.()) {
-      connectWallet();
-    }
-  </script>
-</body>
+      connectBtn.addEventListener("click", () => {
+        if (signer) {
+          disconnectWallet();
+        } else {
+          connectWallet();
+        }
+      });
+    </script>
+  </body>
 </html>
